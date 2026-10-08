@@ -25,6 +25,11 @@ export const metadata: Metadata = {
   title: "Dream Dollar Admin Panel",
   description: "Dream Dollar Admin Dashboard",
   robots: "noindex, nofollow",
+  icons: {
+    icon: "/images/logo.png",
+    shortcut: "/images/logo.png",
+    apple: "/images/logo.png",
+  },
 };
 
 export default function RootLayout({
