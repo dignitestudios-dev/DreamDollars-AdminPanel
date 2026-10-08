@@ -1,0 +1,29 @@
+/* nprogress customization */
+#nprogress {
+  pointer-events: none;
+}
+
+#nprogress .bar {
+  background: linear-gradient(to right, #649809, #84bd17);
+  position: fixed;
+  z-index: 1031;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  box-shadow: 0 0 15px #649809;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 15px #649809, 0 0 8px #84bd17;
+}
+
+/* Fade out the progress bar */
+#nprogress.done .bar {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#nprogress .spinner {
+  display: none;
+}
