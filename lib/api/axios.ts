@@ -3,7 +3,7 @@ import { getDeviceId, getDeviceModel } from "@/lib/device";
 import { store } from "@/lib/store";
 import { setServerError } from "@/lib/slices/uiSlice";
 
-export const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://3.134.75.182:3001";
+export const baseURL = process.env.NEXT_PUBLIC_API_URL || "https://api.dev.dreamdollars.me";
 
 // Create an Axios instance
 export const API = axios.create({

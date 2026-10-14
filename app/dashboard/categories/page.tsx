@@ -38,6 +38,8 @@ export default function CategoriesPage() {
   };
 
   const handleTypeChange = (type: string) => {
+      console.log("Selected type:", type);
+
     setSelectedType(type);
     setPage(1);
   };

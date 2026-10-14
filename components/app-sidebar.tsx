@@ -90,7 +90,7 @@ const data = {
           icon: Megaphone,
         },
         {
-          title: "Support Chat",
+          title: "Chat Support" ,
           url: "/dashboard/chat",
           icon: MessageCircle,
         },

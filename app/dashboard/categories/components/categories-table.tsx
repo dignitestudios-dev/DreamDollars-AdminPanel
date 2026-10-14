@@ -200,8 +200,13 @@ export function CategoriesTable({
             <button
               key={tab.id}
               type="button"
-              onClick={() => onTypeChange(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+onClick={(e) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  console.log("Clicked filter:", tab.id);
+  onTypeChange(tab.id);
+}}              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 isActive
                   ? "bg-white dark:bg-card text-gray-900 dark:text-gray-100 shadow-2xs font-semibold"
                   : "text-muted-foreground hover:text-foreground"

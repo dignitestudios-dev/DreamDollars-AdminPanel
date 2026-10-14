@@ -26,20 +26,27 @@ export function useUrlState<T extends Record<string, any>>(
     return searchParams ? (searchParams.get(singleKey) ?? singleDefault) : singleDefault;
   }, [isSingleKey, searchParams, singleKey, singleDefault]);
 
+
   const setSingleValue = useCallback(
     (next: string) => {
       if (!isSingleKey) return;
-      const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
+
+      const params = new URLSearchParams(window.location.search);
+
       if (next && next !== singleDefault) {
         params.set(singleKey, next);
       } else {
         params.delete(singleKey);
       }
+
       const queryString = params.toString();
-      const targetUrl = queryString ? `${pathname}?${queryString}` : pathname;
-      router.replace(targetUrl, { scroll: false });
+      const targetUrl = queryString
+        ? `${pathname}?${queryString}`
+        : pathname;
+
+      window.history.replaceState(null, "", targetUrl);
     },
-    [isSingleKey, router, pathname, searchParams, singleKey, singleDefault]
+    [isSingleKey, pathname, singleKey, singleDefault]
   );
 
   const values = useMemo(() => {
