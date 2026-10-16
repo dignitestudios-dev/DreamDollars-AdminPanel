@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateAdminTip, AdminTip, DayOfWeek, TipStatus } from "@/lib/api/tips.api";
 import {
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Edit, Save, Lightbulb } from "lucide-react";
+import { Loader2, Edit, Save } from "lucide-react";
 import { toast } from "sonner";
 
 const DAYS_OPTIONS: { value: DayOfWeek; label: string }[] = [
@@ -77,14 +77,15 @@ export function EditTipDialog({
     onOpenChange(newOpen);
   };
 
-  useEffect(() => {
-    if (tip) {
-      setTitle(tip.title || "");
-      setDescription(tip.description || "");
-      setDayOfWeek((tip.day_of_week?.toLowerCase() || "monday") as DayOfWeek);
-      setStatus((tip.status?.toLowerCase() || "active") as TipStatus);
-    }
-  }, [tip]);
+  const [prevTipId, setPrevTipId] = useState<string | null>(null);
+
+  if (tip && tip.id !== prevTipId) {
+    setPrevTipId(tip.id);
+    setTitle(tip.title || "");
+    setDescription(tip.description || "");
+    setDayOfWeek((tip.day_of_week?.toLowerCase() || "monday") as DayOfWeek);
+    setStatus((tip.status?.toLowerCase() || "active") as TipStatus);
+  }
 
   const mutation = useMutation({
     mutationFn: (payload: {
@@ -93,21 +94,25 @@ export function EditTipDialog({
       day_of_week: DayOfWeek;
       status: TipStatus;
     }) => updateAdminTip(tip!.id, payload),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       isSubmittingRef.current = false;
       toast.success(data?.message || "Tip updated successfully!");
-      queryClient.invalidateQueries({ queryKey: ["adminTips"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["adminTips"] }),
+        queryClient.invalidateQueries({ queryKey: ["adminTipsTotalCount"] }),
+      ]);
       if (tip?.id) {
         queryClient.invalidateQueries({ queryKey: ["adminTip", tip.id] });
       }
       onOpenChange(false);
       onSuccess?.();
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       isSubmittingRef.current = false;
-      toast.error(
-        err?.response?.data?.message || "Failed to update tip. Please try again."
-      );
+      const errorMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to update tip. Please try again.";
+      toast.error(errorMsg);
     },
   });
 
@@ -136,7 +141,7 @@ export function EditTipDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[540px]">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-[540px] min-w-0 overflow-x-hidden">
         <DialogHeader>
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-lg bg-[#649809]/10 border border-[#649809]/20 flex items-center justify-center text-[#649809]">
@@ -151,12 +156,14 @@ export function EditTipDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit}   className="w-full min-w-0 space-y-4 overflow-x-hidden py-2 px-2"
+>
           {/* Title */}
-          <div className="space-y-1.5">
+          <div className="min-w-0 w-full space-y-1.5">
             <Label htmlFor="edit-tip-title" className="text-xs font-semibold">
               Tip Title <span className="text-rose-500">*</span>
             </Label>
+
             <Input
               id="edit-tip-title"
               placeholder="e.g., Save on Subscriptions"
@@ -164,15 +171,16 @@ export function EditTipDialog({
               onChange={(e) => setTitle(e.target.value)}
               disabled={mutation.isPending}
               maxLength={150}
-              className="text-xs"
+              className="w-full min-w-0 max-w-full text-xs"
             />
           </div>
-
           {/* Description */}
-          <div className="space-y-1.5">
+          {/* Description */}
+          <div className="min-w-0 w-full space-y-1.5">
             <Label htmlFor="edit-tip-desc" className="text-xs font-semibold">
               Tip Description / Advice <span className="text-rose-500">*</span>
             </Label>
+
             <Textarea
               id="edit-tip-desc"
               placeholder="e.g., Audit recurring subscriptions every quarter to cancel unused services."
@@ -181,7 +189,8 @@ export function EditTipDialog({
               disabled={mutation.isPending}
               maxLength={1500}
               rows={4}
-              className="text-xs resize-none"
+              wrap="soft"
+              className="!block !w-full !min-w-0 !max-w-full !h-[130px] !min-h-[130px] !max-h-[130px] resize-none whitespace-pre-wrap [overflow-wrap:anywhere] break-all overflow-x-hidden overflow-y-auto text-xs leading-relaxed"
             />
           </div>
 

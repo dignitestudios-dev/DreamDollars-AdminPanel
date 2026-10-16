@@ -3,18 +3,37 @@ import { baseURL } from "@/lib/api/axios";
 
 let socketInstance: Socket | null = null;
 
-export const getChatSocket = (): Socket => {
+export const getChatSocket = (): Socket | null => {
   if (typeof window === "undefined") {
-    // In SSR, return dummy object or null
-    return null as unknown as Socket;
+    // In SSR, return null
+    return null;
   }
 
   const token = localStorage.getItem("authToken");
 
+  if (!token) {
+    if (socketInstance) {
+      socketInstance.removeAllListeners();
+      socketInstance.disconnect();
+      socketInstance = null;
+    }
+    return null;
+  }
+
+  const formattedToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+
+  // If token has changed on an existing socket, reconnect with new token
+  const authRecord = socketInstance?.auth as Record<string, unknown> | undefined;
+  if (socketInstance && authRecord?.token !== formattedToken) {
+    socketInstance.removeAllListeners();
+    socketInstance.disconnect();
+    socketInstance = null;
+  }
+
   if (!socketInstance || socketInstance.disconnected) {
     socketInstance = io(baseURL, {
       auth: {
-        token: token ? (token.startsWith("Bearer ") ? token : `Bearer ${token}`) : "",
+        token: formattedToken,
       },
       transports: ["websocket"],
       reconnection: true,
@@ -41,6 +60,7 @@ export const getChatSocket = (): Socket => {
 
 export const disconnectChatSocket = () => {
   if (socketInstance) {
+    socketInstance.removeAllListeners();
     socketInstance.disconnect();
     socketInstance = null;
   }

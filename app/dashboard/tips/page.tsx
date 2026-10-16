@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getAdminTips } from "@/lib/api/tips.api";
+import { getAdminTips, extractTipsTotalCount } from "@/lib/api/tips.api";
 import { NotificationTimeCard } from "./components/notification-time-card";
 import { DaysOverviewStrip } from "./components/days-overview-strip";
 import { TipsTable } from "./components/tips-table";
@@ -34,17 +34,26 @@ export default function TipsPage() {
     document.title = "Daily Tips Management | Dream Dollar Admin";
   }, []);
 
-  const handleSearchChange = (val: string) => {
-    setParams({ search: val, page: 1 });
-  };
+  const handleSearchChange = React.useCallback(
+    (val: string) => {
+      setParams({ search: val, page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleDayOfWeekChange = (day: string) => {
-    setParams({ dayOfWeek: day, page: 1 });
-  };
+  const handleDayOfWeekChange = React.useCallback(
+    (day: string) => {
+      setParams({ dayOfWeek: day, page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleStatusChange = (val: string) => {
-    setParams({ status: val, page: 1 });
-  };
+  const handleStatusChange = React.useCallback(
+    (val: string) => {
+      setParams({ status: val, page: 1 });
+    },
+    [setParams]
+  );
 
   // TanStack Query for Tips list
   const {
@@ -68,7 +77,11 @@ export default function TipsPage() {
   });
 
   // Query to count all tips across the system (without filters) for safety rule and overall count
-  const { data: allTipsResponse } = useQuery({
+  const {
+    data: allTipsResponse,
+    refetch: refetchAllTips,
+    isFetching: isAllTipsFetching,
+  } = useQuery({
     queryKey: ["adminTipsTotalCount"],
     queryFn: () => getAdminTips({ limit: 100 }),
   });
@@ -76,12 +89,30 @@ export default function TipsPage() {
   const tips = response?.data ?? [];
   const pagination = response?.pagination;
 
-  // Calculate total count
-  const allTips = allTipsResponse?.data ?? tips;
-  const totalTipsCount =
-    allTipsResponse?.pagination?.totalItems ??
-    pagination?.totalItems ??
-    tips.length;
+  // Determine if the main table query is currently in its default unfiltered state
+  const isUnfiltered =
+    (!search || search.trim() === "") &&
+    (!dayOfWeek || dayOfWeek === "all") &&
+    (!status || status === "all");
+
+  const totalFromAllQuery = extractTipsTotalCount(allTipsResponse);
+  const totalFromListQuery = isUnfiltered ? extractTipsTotalCount(response) : undefined;
+
+  // Global total count must reflect all tips across the system, independent of active filters/search/pagination
+  const totalTipsCount = Math.max(
+    totalFromAllQuery ?? 0,
+    totalFromListQuery ?? 0,
+    isUnfiltered ? tips.length : 0
+  );
+
+  const handleRefresh = React.useCallback(async () => {
+    await Promise.all([refetch(), refetchAllTips()]);
+  }, [refetch, refetchAllTips]);
+
+  // Use full allTips array for day-by-day distribution strip
+  const allTips = (allTipsResponse?.data && allTipsResponse.data.length > 0)
+    ? allTipsResponse.data
+    : tips;
 
   // Calculate tip counts per day for the visual day selector
   const dayCounts: Record<string, number> = {
@@ -161,15 +192,15 @@ export default function TipsPage() {
             <AlertCircle className="size-4 shrink-0 text-rose-600" />
             <span>
               Failed to load tips:{" "}
-              {(error as any)?.response?.data?.message ||
-                (error as any)?.message ||
+              {(error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                (error as Error | null)?.message ||
                 "Please check server connection."}
             </span>
           </div>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => refetch()}
+            onClick={handleRefresh}
             className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-100 cursor-pointer"
           >
             <RefreshCw className="mr-1.5 size-3" />
@@ -193,8 +224,8 @@ export default function TipsPage() {
         onPageChange={(p) => setParams({ page: p })}
         limit={limit}
         onLimitChange={(l) => setParams({ limit: l, page: 1 })}
-        onRefresh={() => refetch()}
-        isRefreshing={isFetching}
+        onRefresh={handleRefresh}
+        isRefreshing={isFetching || isAllTipsFetching}
         totalTipsCount={totalTipsCount}
       />
     </div>

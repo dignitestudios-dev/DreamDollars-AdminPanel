@@ -28,9 +28,12 @@ export default function FaqsPage() {
     document.title = "FAQs | Dream Dollar Admin";
   }, []);
 
-  const handleSearchChange = (val: string) => {
-    setParams({ search: val, page: 1 });
-  };
+  const handleSearchChange = React.useCallback(
+    (val: string) => {
+      setParams({ search: val, page: 1 });
+    },
+    [setParams]
+  );
 
   // TanStack Query for FAQs
   const {
@@ -89,8 +92,8 @@ export default function FaqsPage() {
             <AlertCircle className="size-4 shrink-0 text-rose-600" />
             <span>
               Failed to load FAQs:{" "}
-              {(error as any)?.response?.data?.message ||
-                (error as any)?.message ||
+              {(error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+                (error as Error | null)?.message ||
                 "Please check server connection."}
             </span>
           </div>

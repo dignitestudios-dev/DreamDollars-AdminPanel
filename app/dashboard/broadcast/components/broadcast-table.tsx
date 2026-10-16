@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { BroadcastRecord, BroadcastsPagination } from "@/lib/api/notifications.api";
 import { CreateBroadcastDialog } from "./create-broadcast-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/empty-state";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useSearch } from "@/hooks/use-search";
 
 interface BroadcastTableProps {
   broadcasts: BroadcastRecord[];
@@ -63,18 +63,15 @@ export function BroadcastTable({
   isRefreshing = false,
   onBroadcastCreated,
 }: BroadcastTableProps) {
-  const [searchInput, setSearchInput] = useState(search);
-  const debouncedSearch = useDebounce(searchInput, 400);
-
-  useEffect(() => {
-    setSearchInput(search);
-  }, [search]);
-
-  useEffect(() => {
-    if (debouncedSearch !== search) {
-      onSearchChange(debouncedSearch.trim());
-    }
-  }, [debouncedSearch, search, onSearchChange]);
+  const {
+    query: searchInput,
+    handleInputChange,
+    clear: handleClearSearch,
+  } = useSearch({
+    value: search,
+    onChange: onSearchChange,
+    delay: 400,
+  });
 
   const totalPages = pagination?.totalPages || 1;
   const totalItems = pagination?.totalItems ?? broadcasts.length;
@@ -117,17 +114,14 @@ export function BroadcastTable({
           <Input
             placeholder="Search broadcasts by title or message..."
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={handleInputChange}
             className="pl-9 pr-8 text-xs h-9 bg-background"
           />
           {searchInput && (
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => {
-                setSearchInput("");
-                onSearchChange("");
-              }}
+              onClick={handleClearSearch}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="size-3.5" />

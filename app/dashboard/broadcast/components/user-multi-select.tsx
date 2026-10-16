@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAdminUsers, AdminUser } from "@/lib/api/users.api";
 import { Input } from "@/components/ui/input";
@@ -17,13 +17,11 @@ import {
   Check,
   X,
   Users,
-  User,
   ChevronsUpDown,
   UserCheck,
-  CheckSquare,
-  Square,
-  Sparkles,
 } from "lucide-react";
+
+import { useSearch } from "@/hooks/use-search";
 
 interface UserMultiSelectProps {
   selectedUserIds: string[];
@@ -37,15 +35,15 @@ export function UserMultiSelect({
   disabled = false,
 }: UserMultiSelectProps) {
   const [open, setOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  const {
+    query: searchTerm,
+    debouncedQuery: debouncedSearch,
+    handleInputChange,
+    clear: handleClearSearch,
+  } = useSearch({
+    defaultValue: "",
+    delay: 250,
+  });
 
   // Fetch users from API
   const { data: response, isLoading } = useQuery({
@@ -118,6 +116,7 @@ export function UserMultiSelect({
           <div
             role="combobox"
             aria-expanded={open}
+            aria-controls="user-multi-select-list"
             className={`w-full min-h-[44px] px-3 py-2 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 text-xs bg-background ${
               open
                 ? "border-[#649809] ring-2 ring-[#649809]/20 shadow-sm"
@@ -144,16 +143,35 @@ export function UserMultiSelect({
                   {previewUserIds.map((userId) => {
                     const user = userMap.get(userId);
                     const name = user ? getUserDisplayName(user) : "User";
+                    const email = user?.email;
+                    const identity = email ? `${name} — ${email}` : name;
+
                     return (
                       <span
                         key={userId}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted text-[11px] text-foreground border border-border/80 max-w-[130px] truncate"
+                        title={identity}
+                        aria-label={`Selected recipient: ${identity}`}
+                        className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md border border-border/80 bg-muted px-2 py-1 text-[11px] text-foreground"
                       >
-                        <span className="truncate">{name}</span>
+                        <span className="max-w-[130px] truncate font-medium">{name}</span>
+
+                        {email ? (
+                          <span
+                            title={email}
+                            className="max-w-[180px] truncate text-muted-foreground"
+                          >
+                            {email}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">ID: {userId.slice(-6)}</span>
+                        )}
+
                         <button
                           type="button"
+                          aria-label={`Remove ${identity}`}
+                          title={`Remove ${identity}`}
                           onClick={(e) => removeUser(userId, e)}
-                          className="hover:text-rose-500 rounded p-0.5 cursor-pointer text-muted-foreground"
+                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-rose-500 cursor-pointer"
                         >
                           <X className="size-2.5" />
                         </button>
@@ -188,6 +206,7 @@ export function UserMultiSelect({
 
         {/* Dropdown Content */}
         <PopoverContent
+          id="user-multi-select-list"
           align="start"
           sideOffset={5}
           className="w-[var(--radix-popover-trigger-width)] min-w-[340px] max-w-[480px] p-0 shadow-lg border-border bg-card rounded-xl overflow-hidden"
@@ -199,14 +218,14 @@ export function UserMultiSelect({
               <Input
                 placeholder="Search by name or email..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={handleInputChange}
                 className="pl-8 pr-8 text-xs h-8 bg-background border-border"
                 autoFocus
               />
               {searchTerm && (
                 <button
                   type="button"
-                  onClick={() => setSearchTerm("")}
+                  onClick={handleClearSearch}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <X className="size-3" />

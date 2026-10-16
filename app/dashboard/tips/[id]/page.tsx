@@ -9,6 +9,7 @@ import {
   deleteAdminTip,
   getDailyNotificationTime,
   getAdminTips,
+  extractTipsTotalCount,
 } from "@/lib/api/tips.api";
 import { EditTipDialog } from "../components/edit-tip-dialog";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Tooltip,
@@ -40,13 +40,9 @@ import {
   Clock,
   Calendar,
   Bell,
-  CheckCircle2,
   AlertTriangle,
-  Copy,
-  Check,
   RefreshCw,
   Sparkles,
-  Smartphone,
   ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -69,7 +65,6 @@ export default function TipDetailPage() {
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Fetch tip details
   const {
@@ -93,12 +88,12 @@ export default function TipDetailPage() {
   // Fetch total tips count for safety deletion check
   const { data: allTipsResponse } = useQuery({
     queryKey: ["adminTipsTotalCount"],
-    queryFn: () => getAdminTips({ limit: 10 }),
+    queryFn: () => getAdminTips({ limit: 100 }),
   });
 
   const tip = tipResponse?.data;
   const notificationTime = notifTimeResponse?.data?.notificationTime || "09:00";
-  const totalTipsCount = allTipsResponse?.pagination?.totalItems ?? 1;
+  const totalTipsCount = extractTipsTotalCount(allTipsResponse) ?? 1;
   const isDeleteProtected = totalTipsCount <= 1;
 
   React.useEffect(() => {
@@ -110,15 +105,19 @@ export default function TipDetailPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: () => deleteAdminTip(id),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       toast.success(res?.message || "Tip deleted successfully");
-      queryClient.invalidateQueries({ queryKey: ["adminTips"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["adminTips"] }),
+        queryClient.invalidateQueries({ queryKey: ["adminTipsTotalCount"] }),
+      ]);
       router.push("/dashboard/tips");
     },
-    onError: (err: any) => {
-      toast.error(
-        err?.response?.data?.message || "Failed to delete tip. Please try again."
-      );
+    onError: (err: unknown) => {
+      const errorMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to delete tip. Please try again.";
+      toast.error(errorMsg);
     },
   });
 
@@ -131,15 +130,6 @@ export default function TipDetailPage() {
       return;
     }
     deleteMutation.mutate();
-  };
-
-  const handleCopyId = () => {
-    if (id) {
-      navigator.clipboard.writeText(id);
-      setCopied(true);
-      toast.success("Tip ID copied to clipboard!");
-      setTimeout(() => setCopied(false), 2000);
-    }
   };
 
   const formatTime12h = (timeStr?: string) => {
@@ -155,22 +145,6 @@ export default function TipDetailPage() {
       return `${displayHours}:${displayMinutes} ${period}`;
     } catch {
       return timeStr;
-    }
-  };
-
-  const formatDateTime = (dateStr?: string) => {
-    if (!dateStr) return "-";
-    try {
-      return new Date(dateStr).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-    } catch {
-      return dateStr;
     }
   };
 
@@ -209,7 +183,7 @@ export default function TipDetailPage() {
             Tip Not Found or Failed to Load
           </h2>
           <p className="text-xs text-muted-foreground">
-            {(error as any)?.response?.data?.message ||
+            {(error as { response?: { data?: { message?: string } } } | null)?.response?.data?.message ||
               "The financial tip could not be found or has been removed."}
           </p>
           <div className="flex justify-center gap-3 pt-2">
@@ -259,7 +233,7 @@ export default function TipDetailPage() {
           </Link>
           <div className="h-4 w-px bg-border hidden sm:block" />
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <h1 className="text-xl font-bold break-all tracking-tight text-foreground flex items-center gap-2">
               <span>{tip.title}</span>
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -462,7 +436,7 @@ export default function TipDetailPage() {
             </div>
             <AlertDialogDescription className="text-xs text-muted-foreground">
               Are you sure you want to delete{" "}
-              <strong className="text-foreground">&quot;{tip.title}&quot;</strong>?
+              <strong className="text-foreground break-all">&quot;{tip.title}&quot;</strong>?
               This action cannot be undone. Users will no longer receive this tip.
             </AlertDialogDescription>
           </AlertDialogHeader>

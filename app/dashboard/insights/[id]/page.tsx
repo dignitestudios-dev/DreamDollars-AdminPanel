@@ -183,7 +183,7 @@ export default function InsightDetailPage() {
               <span>Insights</span>
             </Link>
             <span className="text-muted-foreground text-xs">/</span>
-            <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate max-w-xs sm:max-w-md">
+            <span className="text-xs font-semibold text-gray-900 dark:text-gray-100  max-w-xs sm:max-w-md break-all">
               {insight.title}
             </span>
           </div>
@@ -249,7 +249,7 @@ export default function InsightDetailPage() {
                 <AlertDialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">
                   Delete Financial Insight
                 </AlertDialogTitle>
-                <AlertDialogDescription className="text-xs text-muted-foreground">
+                <AlertDialogDescription className="text-xs text-muted-foreground break-all">
                   Are you sure you want to delete <strong className="text-foreground">"{insight.title}"</strong>? This action cannot be undone and will remove it permanently.
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -321,7 +321,7 @@ export default function InsightDetailPage() {
                   <span>{formattedCreatedDate}</span>
                 </div>
 
-                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-snug">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-snug break-all">
                   {insight.title}
                 </h2>
               </div>

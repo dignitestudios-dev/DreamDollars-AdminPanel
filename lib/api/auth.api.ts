@@ -1,8 +1,12 @@
 import { API } from './axios';
+import { getDeviceId, getDeviceModel } from '@/lib/device';
+import { getStoredFcmToken } from '@/lib/firebase/messaging';
 
 export interface AdminLoginCredentials {
   email: string;
   password: string;
+  fcmToken?: string | null;
+  [key: string]: any;
 }
 
 export interface AdminLoginResponse {
@@ -57,26 +61,92 @@ export interface AdminResetPasswordResponse {
 export const adminLogin = async (
   credentials: AdminLoginCredentials
 ): Promise<AdminLoginResponse> => {
-  const response = await API.post<AdminLoginResponse>(
-    "/admin/login",
-    credentials,
-    {
-      headers: {
-        accept: "application/json",
-        deviceuniqueid: "device-uuid-12345",
-        devicemodel: "iPhone 15 Pro",
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  const fcmToken =
+    credentials.fcmToken ||
+    getStoredFcmToken() ||
+    (typeof window !== "undefined" ? localStorage.getItem("fcmToken") : null);
 
-  const data = response.data;
-  const token = data?.token || data?.data?.token || data?.data?.accessToken;
-  if (token && typeof window !== "undefined") {
-    localStorage.setItem("authToken", token);
+  const deviceId =
+    typeof window !== "undefined"
+      ? (await getDeviceId()) || "device-uuid-12345"
+      : "server-instance";
+  const deviceModel =
+    typeof window !== "undefined"
+      ? getDeviceModel() || "Web Admin"
+      : "Next.js Server";
+
+  const requestHeaders: Record<string, string> = {
+    accept: "application/json",
+    deviceuniqueid: deviceId,
+    devicemodel: deviceModel,
+    "Content-Type": "application/json",
+  };
+
+  if (fcmToken) {
+    requestHeaders["fcmtoken"] = fcmToken;
+    requestHeaders["fcm-token"] = fcmToken;
+    requestHeaders["devicetoken"] = fcmToken;
   }
 
-  return data;
+  const payload: Record<string, any> = {
+    email: credentials.email,
+    password: credentials.password,
+    fcmToken: fcmToken || (credentials.fcmToken !== undefined ? credentials.fcmToken : ""),
+  };
+
+  try {
+    const response = await API.post<AdminLoginResponse>(
+      "/admin/login",
+      payload,
+      {
+        headers: requestHeaders,
+      }
+    );
+
+    const data = response.data;
+    const token = data?.token || data?.data?.token || data?.data?.accessToken;
+    if (token && typeof window !== "undefined") {
+      localStorage.setItem("authToken", token);
+    }
+
+    return data;
+  } catch (error: any) {
+    const errMsg =
+      error?.response?.data?.message ||
+      error?.message ||
+      "";
+
+    // If backend rejects unexpected body key (e.g. "Unexpected: fcmToken"), retry without fcmToken in body but keep in headers
+    if (
+      payload.fcmToken &&
+      typeof errMsg === "string" &&
+      errMsg.includes("Unexpected: fcmToken")
+    ) {
+      console.warn("[adminLogin] Backend rejected fcmToken in body, retrying with fcmToken in headers only...");
+      const fallbackPayload = {
+        email: credentials.email,
+        password: credentials.password,
+      };
+
+      const retryResponse = await API.post<AdminLoginResponse>(
+        "/admin/login",
+        fallbackPayload,
+        {
+          headers: requestHeaders,
+        }
+      );
+
+      const data = retryResponse.data;
+      const token = data?.token || data?.data?.token || data?.data?.accessToken;
+      if (token && typeof window !== "undefined") {
+        localStorage.setItem("authToken", token);
+      }
+
+      return data;
+    }
+
+    throw error;
+  }
 };
 
 // Admin Forgot Password API call
@@ -207,13 +277,25 @@ export const adminLogout = async () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("authToken");
       localStorage.removeItem("user");
+      localStorage.removeItem("fcmToken");
+      localStorage.removeItem("deviceuniqueid");
     }
   }
 };
 
 // Login API call
 export const login = async (credentials: any) => {
-  const response = await API.post('/auth/login', credentials);
+  const fcmToken =
+    credentials?.fcmToken ||
+    getStoredFcmToken() ||
+    (typeof window !== "undefined" ? localStorage.getItem("fcmToken") : null);
+
+  const payload = {
+    ...credentials,
+    ...(fcmToken ? { fcmToken } : {}),
+  };
+
+  const response = await API.post('/auth/login', payload);
   // Store token in localStorage (handled by interceptor, but can be done here too)
   if (response.data.token) {
     localStorage.setItem('authToken', response.data.token);

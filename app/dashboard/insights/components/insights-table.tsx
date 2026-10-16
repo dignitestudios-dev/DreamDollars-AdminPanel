@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -11,10 +11,7 @@ import {
   Sparkles,
   Video,
   ExternalLink,
-  Calendar,
   FileText,
-  Image as ImageIcon,
-  Edit,
   Trash2,
   Eye,
 } from "lucide-react";
@@ -52,7 +49,7 @@ import { AdminCategory } from "@/lib/api/categories.api";
 import { CreateInsightDialog } from "./create-insight-dialog";
 import { EditInsightDialog } from "./edit-insight-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useSearch } from "@/hooks/use-search";
 
 interface InsightsTableProps {
   insights: AdminInsight[];
@@ -71,6 +68,7 @@ interface InsightsTableProps {
   onLimitChange: (limit: number) => void;
   onRefresh: () => void;
   isRefreshing?: boolean;
+  onResetFilters: () => void;
 }
 
 export function InsightsTable({
@@ -90,11 +88,19 @@ export function InsightsTable({
   onLimitChange,
   onRefresh,
   isRefreshing = false,
+  onResetFilters,
 }: InsightsTableProps) {
-  const [searchInput, setSearchInput] = useState(search);
-  const debouncedSearch = useDebounce(searchInput, 400);
-  const [deletingInsight, setDeletingInsight] = useState<AdminInsight | null>(null);
+  const {
+    query: searchInput,
+    handleInputChange,
+    clear: handleClearSearch,
+  } = useSearch({
+    value: search,
+    onChange: onSearchChange,
+    delay: 400,
+  });
 
+  const [deletingInsight, setDeletingInsight] = useState<AdminInsight | null>(null);
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
@@ -105,20 +111,19 @@ export function InsightsTable({
       setDeletingInsight(null);
       onRefresh();
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || "Failed to delete insight");
+    onError: (err: unknown) => {
+      const errorMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to delete insight";
+      toast.error(errorMsg);
     },
   });
 
-  useEffect(() => {
-    setSearchInput(search);
-  }, [search]);
+  const handleResetFilters = () => {
+    handleClearSearch();
+    onResetFilters();
+  };
 
-  useEffect(() => {
-    if (debouncedSearch !== search) {
-      onSearchChange(debouncedSearch.trim());
-    }
-  }, [debouncedSearch, search, onSearchChange]);
 
   const totalItems =
     pagination?.total ?? pagination?.totalItems ?? insights.length;
@@ -129,12 +134,9 @@ export function InsightsTable({
 
   const hasActiveFilters = Boolean(search) || status !== "all" || categoryId !== "all";
 
-  const handleResetFilters = () => {
-    setSearchInput("");
-    onSearchChange("");
-    onStatusChange("all");
-    onCategoryChange("all");
-  };
+
+
+
 
   return (
     <div className="w-full space-y-4">
@@ -148,10 +150,10 @@ export function InsightsTable({
             <AlertDialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">
               Delete Financial Insight
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-muted-foreground">
+            <AlertDialogDescription className="text-xs text-muted-foreground break-all">
               Are you sure you want to delete{" "}
               <strong className="text-foreground">
-                "{deletingInsight?.title}"
+                &ldquo;{deletingInsight?.title}&rdquo;
               </strong>
               ? This action cannot be undone and will remove it permanently.
             </AlertDialogDescription>
@@ -183,17 +185,14 @@ export function InsightsTable({
           <Input
             placeholder="Search insights by title or content..."
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={handleInputChange}
             className="pl-9 pr-9 h-9 text-sm bg-white dark:bg-card border-border focus-visible:ring-[#649809]"
           />
           {searchInput && (
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => {
-                setSearchInput("");
-                onSearchChange("");
-              }}
+              onClick={handleClearSearch}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="size-4" />
@@ -257,9 +256,8 @@ export function InsightsTable({
             title="Refresh insight list"
           >
             <RefreshCw
-              className={`size-3.5 ${
-                isRefreshing ? "animate-spin text-[#649809]" : ""
-              }`}
+              className={`size-3.5 ${isRefreshing ? "animate-spin text-[#649809]" : ""
+                }`}
             />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
@@ -331,10 +329,10 @@ export function InsightsTable({
                   const categoryColor = item.category?.color_code || "#649809";
                   const formattedDate = item.created_at
                     ? new Date(item.created_at).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
                     : "—";
 
                   return (
@@ -364,9 +362,13 @@ export function InsightsTable({
                             <Link
                               href={`/dashboard/insights/${item.id}`}
                               title={item?.title}
-                              className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-snug line-clamp-1 hover:text-[#649809] transition-colors"
+                              className="font-semibold text-sm text-gray-900 dark:text-gray-100 leading-snug line-clamp-1 hover:text-[#649809] transition-colors break-all"
                             >
-                              {item?.title}
+                              {item?.title
+                                ? item.title.length > 60
+                                  ? `${item.title.slice(0, 60)}...`
+                                  : item.title
+                                : "—"}
                             </Link>
                             <p className="text-xs text-muted-foreground leading-relaxed">
                               {item?.description

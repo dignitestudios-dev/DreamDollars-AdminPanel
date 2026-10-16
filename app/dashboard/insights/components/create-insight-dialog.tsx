@@ -44,6 +44,8 @@ interface CreateInsightDialogProps {
 type ContentMode = "media" | "link";
 
 export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
+  const MAX_THUMBNAIL_SIZE = 10.5 * 1024 * 1024; // 10 MB
+  const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100 MB
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -85,13 +87,49 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
 
   const categories = categoriesResponse?.data ?? [];
 
+  const isGifFile = (file: File) => {
+    return file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif");
+  };
+
+  const isValidThumbnailImage = (file: File) => {
+    if (isGifFile(file)) return false;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    const allowedExts = /\.(jpe?g|png|webp)$/i;
+    return allowedTypes.includes(file.type.toLowerCase()) || allowedExts.test(file.name);
+  };
+
+  const isValidMp4Video = (file: File) => {
+    if (isGifFile(file)) return false;
+    const isMp4 = file.type.toLowerCase() === "video/mp4" || file.name.toLowerCase().endsWith(".mp4");
+    return isMp4;
+  };
+
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setThumbnailFile(file);
-      const previewUrl = URL.createObjectURL(file);
-      setThumbnailPreview(previewUrl);
+    if (!file) return;
+
+    if (isGifFile(file)) {
+      toast.error("GIF format is not allowed for thumbnails. Please upload a JPG, PNG, or WEBP image.");
+      e.target.value = "";
+      return;
     }
+
+    if (!isValidThumbnailImage(file)) {
+      toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP images are allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_THUMBNAIL_SIZE) {
+      toast.error("Thumbnail image must not exceed 10 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
+
+    setThumbnailFile(file);
+    setThumbnailPreview(URL.createObjectURL(file));
   };
 
   const handleRemoveThumbnail = () => {
@@ -107,9 +145,27 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
 
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setVideoFile(file);
+    if (!file) return;
+
+    if (isGifFile(file)) {
+      toast.error("GIF format is not allowed. Video must be in MP4 format.");
+      e.target.value = "";
+      return;
     }
+
+    if (!isValidMp4Video(file)) {
+      toast.error("Invalid video format. Only MP4 format is allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_VIDEO_SIZE) {
+      toast.error("Video file must not exceed 100 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setVideoFile(file);
   };
 
   const handleRemoveVideo = () => {
@@ -162,7 +218,37 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
       toast.error("Please select a category");
       return;
     }
+    if (contentMode === "media") {
+      if (thumbnailFile) {
+        if (isGifFile(thumbnailFile)) {
+          toast.error("GIF format is not allowed for thumbnails. Please upload a JPG, PNG, or WEBP image.");
+          return;
+        }
+        if (!isValidThumbnailImage(thumbnailFile)) {
+          toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP images are allowed.");
+          return;
+        }
+        if (thumbnailFile.size > MAX_THUMBNAIL_SIZE) {
+          toast.error("Thumbnail image must not exceed 10 MB.");
+          return;
+        }
+      }
 
+      if (videoFile) {
+        if (isGifFile(videoFile)) {
+          toast.error("GIF format is not allowed. Video must be in MP4 format.");
+          return;
+        }
+        if (!isValidMp4Video(videoFile)) {
+          toast.error("Invalid video format. Only MP4 format is allowed.");
+          return;
+        }
+        if (videoFile.size > MAX_VIDEO_SIZE) {
+          toast.error("Video file must not exceed 100 MB.");
+          return;
+        }
+      }
+    }
     isSubmittingRef.current = true;
     const formData = new FormData();
     formData.append("title", title.trim());
@@ -309,29 +395,34 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
           </div>
 
           {/* Description */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="insight-desc" className="text-xs font-medium">
-                Description Content <span className="text-rose-500">*</span>
-              </Label>
+         <div className="w-full min-w-0 space-y-1.5 ">
+  <div className="flex items-center justify-between gap-2">
+    <Label htmlFor="insight-desc" className="text-xs font-medium">
+      Description Content <span className="text-rose-500">*</span>
+    </Label>
 
-              <span className="text-[10px] text-muted-foreground">
-                {description.length}/500
-              </span>
-            </div>
+    <span className="shrink-0 text-[10px] text-muted-foreground">
+      {description.length}/500
+    </span>
+  </div>
 
-            <Textarea
-              id="insight-desc"
-              placeholder="Write the educational content or detailed financial advice..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={mutation.isPending}
-              maxLength={500}
-              rows={4}
-              wrap="soft"
-  className="h-[130px] min-h-[130px] max-h-[130px] resize-none text-xs leading-relaxed whitespace-pre-wrap break-words overflow-y-auto"
-            />
-          </div>
+  <Textarea
+    id="insight-desc"
+    placeholder="Write the educational content or detailed financial advice..."
+    value={description}
+    onChange={(e) => setDescription(e.target.value)}
+    disabled={mutation.isPending}
+    maxLength={500}
+    rows={4}
+    wrap="soft"
+    style={{
+      overflowWrap: "anywhere",
+      wordBreak: "break-all",
+      whiteSpace: "pre-wrap",
+    }}
+    className="!box-border block h-[130px] min-h-[130px] max-h-[130px] w-full min-w-0 max-w-full resize-none overflow-x-hidden overflow-y-auto text-xs leading-relaxed"
+  />
+</div>
 
           {/* Content Mode Switch (Media Upload vs External Link) */}
           <div className="space-y-3 pt-2 border-t border-border">
@@ -374,146 +465,146 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
 
             {/* Mode 1: Media Upload (Thumbnail & Video) */}
             {/* Mode 1: Media Upload (Thumbnail & Video) */}
-{contentMode === "media" && (
-  <div className="w-full min-w-0 max-w-full overflow-hidden space-y-3 rounded-xl border border-border bg-slate-50/60 p-3.5 dark:bg-muted/30">
-    <p className="text-[11px] text-muted-foreground">
-      Upload video guide and thumbnail cover image for mobile presentation.
-    </p>
+            {contentMode === "media" && (
+              <div className="w-full min-w-0 max-w-full overflow-hidden space-y-3 rounded-xl border border-border bg-slate-50/60 p-3.5 dark:bg-muted/30">
+                <p className="text-[11px] text-muted-foreground">
+                  Upload video guide and thumbnail cover image for mobile presentation.
+                </p>
 
-    {/* Thumbnail Image Upload */}
-    <div className="w-full min-w-0 space-y-1.5">
-      <Label className="flex items-center gap-1.5 text-xs font-medium">
-        <ImageIcon className="size-3.5 text-[#649809]" />
-        Thumbnail Cover (Image)
-      </Label>
+                {/* Thumbnail Image Upload */}
+                <div className="w-full min-w-0 space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs font-medium">
+                    <ImageIcon className="size-3.5 text-[#649809]" />
+                    Thumbnail Cover (Image)
+                  </Label>
 
-      {thumbnailFile ? (
-        <div className="relative flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden rounded-lg border border-border bg-white p-2 dark:bg-card">
-          {thumbnailPreview && (
-            <img
-              src={thumbnailPreview}
-              alt="Thumbnail"
-              className="size-10 shrink-0 rounded border border-border object-cover"
-            />
-          )}
+                  {thumbnailFile ? (
+                    <div className="relative flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden rounded-lg border border-border bg-white p-2 dark:bg-card">
+                      {thumbnailPreview && (
+                        <img
+                          src={thumbnailPreview}
+                          alt="Thumbnail"
+                          className="size-10 shrink-0 rounded border border-border object-cover"
+                        />
+                      )}
 
-          {/* IMPORTANT: w-0 */}
-          <div className="min-w-0 w-0 flex-1 overflow-hidden pr-8">
-            <p
-              className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-gray-900 dark:text-gray-100"
-              title={thumbnailFile.name}
-            >
-              {thumbnailFile.name}
-            </p>
+                      {/* IMPORTANT: w-0 */}
+                      <div className="min-w-0 w-0 flex-1 overflow-hidden pr-8">
+                        <p
+                          className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-gray-900 dark:text-gray-100"
+                          title={thumbnailFile.name}
+                        >
+                          {thumbnailFile.name}
+                        </p>
 
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              {(thumbnailFile.size / 1024).toFixed(1)} KB
-            </p>
-          </div>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {(thumbnailFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
 
-          {/* Fixed remove button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={handleRemoveThumbnail}
-            className="absolute right-1.5 top-1/2 size-7 -translate-y-1/2 shrink-0 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
-          >
-            <X className="size-3.5" />
-          </Button>
-        </div>
-      ) : (
-        <div
-          onClick={() => thumbnailInputRef.current?.click()}
-          className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white p-4 text-center transition-colors hover:border-[#649809] dark:bg-card"
-        >
-          <Upload className="mb-1 size-5 text-muted-foreground" />
+                      {/* Fixed remove button */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleRemoveThumbnail}
+                        className="absolute right-1.5 top-1/2 size-7 -translate-y-1/2 shrink-0 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => thumbnailInputRef.current?.click()}
+                      className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white p-4 text-center transition-colors hover:border-[#649809] dark:bg-card"
+                    >
+                      <Upload className="mb-1 size-5 text-muted-foreground" />
 
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-            Click to upload Thumbnail Image
-          </span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Click to upload Thumbnail Image
+                      </span>
 
-          <span className="text-[10px] text-muted-foreground">
-            PNG, JPG, WEBP up to 10MB
-          </span>
-        </div>
-      )}
+                      <span className="text-[10px] text-muted-foreground">
+                        PNG, JPG, WEBP up to 10MB (GIFs not allowed)
+                      </span>
+                    </div>
+                  )}
 
-      <input
-        ref={thumbnailInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleThumbnailChange}
-        className="hidden"
-      />
-    </div>
+                  <input
+                    ref={thumbnailInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/jpg"
+                    onChange={handleThumbnailChange}
+                    className="hidden"
+                  />
+                </div>
 
-    {/* Video File Upload */}
-    <div className="w-full min-w-0 space-y-1.5 border-t border-border/70 pt-2">
-      <Label className="flex items-center gap-1.5 text-xs font-medium">
-        <Video className="size-3.5 text-rose-500" />
-        Video Tutorial (File)
-      </Label>
+                {/* Video File Upload */}
+                <div className="w-full min-w-0 space-y-1.5 border-t border-border/70 pt-2">
+                  <Label className="flex items-center gap-1.5 text-xs font-medium">
+                    <Video className="size-3.5 text-rose-500" />
+                    Video Tutorial (File)
+                  </Label>
 
-      {videoFile ? (
-        <div className="relative flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden rounded-lg border border-border bg-white p-2.5 dark:bg-card">
-          {/* Icon */}
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-rose-500/10 text-rose-600">
-            <FileCheck className="size-4" />
-          </div>
+                  {videoFile ? (
+                    <div className="relative flex w-full min-w-0 max-w-full items-center gap-2.5 overflow-hidden rounded-lg border border-border bg-white p-2.5 dark:bg-card">
+                      {/* Icon */}
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-rose-500/10 text-rose-600">
+                        <FileCheck className="size-4" />
+                      </div>
 
-          {/* IMPORTANT: w-0 flex-1 */}
-          <div className="min-w-0 w-0 flex-1 overflow-hidden pr-8">
-            <p
-              className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-gray-900 dark:text-gray-100"
-              title={videoFile.name}
-            >
-              {videoFile.name}
-            </p>
+                      {/* IMPORTANT: w-0 flex-1 */}
+                      <div className="min-w-0 w-0 flex-1 overflow-hidden pr-8">
+                        <p
+                          className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-gray-900 dark:text-gray-100"
+                          title={videoFile.name}
+                        >
+                          {videoFile.name}
+                        </p>
 
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
-            </p>
-          </div>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
 
-          {/* Fixed remove button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={handleRemoveVideo}
-            className="absolute right-1.5 top-1/2 size-7 -translate-y-1/2 shrink-0 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
-          >
-            <X className="size-3.5" />
-          </Button>
-        </div>
-      ) : (
-        <div
-          onClick={() => videoInputRef.current?.click()}
-          className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white p-4 text-center transition-colors hover:border-[#649809] dark:bg-card"
-        >
-          <Video className="mb-1 size-5 text-muted-foreground" />
+                      {/* Fixed remove button */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleRemoveVideo}
+                        className="absolute right-1.5 top-1/2 size-7 -translate-y-1/2 shrink-0 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => videoInputRef.current?.click()}
+                      className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white p-4 text-center transition-colors hover:border-[#649809] dark:bg-card"
+                    >
+                      <Video className="mb-1 size-5 text-muted-foreground" />
 
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-            Click to upload Video File
-          </span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        Click to upload Video File
+                      </span>
 
-          <span className="text-[10px] text-muted-foreground">
-            MP4, MOV, WEBM
-          </span>
-        </div>
-      )}
+                      <span className="text-[10px] text-muted-foreground">
+                        MP4 format only up to 100MB (No GIFs)
+                      </span>
+                    </div>
+                  )}
 
-      <input
-        ref={videoInputRef}
-        type="file"
-        accept="video/*"
-        onChange={handleVideoChange}
-        className="hidden"
-      />
-    </div>
-  </div>
-)}
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/mp4,.mp4"
+                    onChange={handleVideoChange}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Mode 2: External Article Link */}
             {contentMode === "link" && (

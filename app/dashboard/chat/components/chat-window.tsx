@@ -47,6 +47,7 @@ interface ChatWindowProps {
   onSendMessage: (text: string) => Promise<void>;
   onClearChat: () => Promise<void>;
   onDeleteMessage: (messageId: string) => Promise<void>;
+  onRetryMessage?: (messageId: string) => Promise<void> | void;
   onLoadOlderMessages?: () => Promise<void>;
   hasOlderMessages?: boolean;
   isLoadingOlder?: boolean;
@@ -61,6 +62,7 @@ export function ChatWindow({
   onSendMessage,
   onClearChat,
   onDeleteMessage,
+  onRetryMessage,
   onLoadOlderMessages,
   hasOlderMessages = false,
   isLoadingOlder = false,
@@ -279,6 +281,7 @@ export function ChatWindow({
                   userName={room.user_name}
                   onDeleteMessage={(id) => setDeleteMessageId(id)}
                   onPreviewAttachment={(att) => setSelectedAttachment(att)}
+                  onRetryMessage={onRetryMessage}
                 />
               ))}
             </div>

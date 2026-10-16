@@ -23,17 +23,48 @@ export interface AdminTip {
 }
 
 export interface TipsPagination {
-  currentPage: number;
-  itemsPerPage: number;
-  totalItems: number;
-  totalPages: number;
+  currentPage?: number;
+  itemsPerPage?: number;
+  totalItems?: number;
+  total?: number;
+  totalCount?: number;
+  count?: number;
+  totalPages?: number;
+  [key: string]: unknown;
 }
 
 export interface GetTipsResponse {
   success: boolean;
   message: string;
   data: AdminTip[];
-  pagination: TipsPagination;
+  pagination?: TipsPagination;
+  total?: number;
+  totalItems?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Safely extracts the total tips count from a response across all backend pagination conventions.
+ */
+export function extractTipsTotalCount(response?: GetTipsResponse | null): number | undefined {
+  if (!response) return undefined;
+  const pagination = response.pagination as Record<string, unknown> | undefined;
+  if (pagination) {
+    if (typeof pagination.totalItems === "number") return pagination.totalItems;
+    if (typeof pagination.total === "number") return pagination.total;
+    if (typeof pagination.totalCount === "number") return pagination.totalCount;
+    if (typeof pagination.count === "number") return pagination.count;
+  }
+  const root = response as Record<string, unknown>;
+  if (typeof root.totalItems === "number") return root.totalItems;
+  if (typeof root.total === "number") return root.total;
+  if (typeof root.totalCount === "number") return root.totalCount;
+  if (typeof root.count === "number") return root.count;
+
+  if (Array.isArray(response.data)) {
+    return response.data.length;
+  }
+  return undefined;
 }
 
 export interface GetTipsParams {
@@ -107,7 +138,7 @@ export interface UpdateNotificationTimeResponse {
 export const getAdminTips = async (
   params?: GetTipsParams
 ): Promise<GetTipsResponse> => {
-  const cleanParams: Record<string, any> = {};
+  const cleanParams: Record<string, string | number> = {};
 
   if (params?.day_of_week && params.day_of_week !== "all") {
     cleanParams.day_of_week = params.day_of_week;

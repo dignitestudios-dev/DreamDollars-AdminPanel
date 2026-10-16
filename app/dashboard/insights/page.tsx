@@ -32,18 +32,35 @@ export default function InsightsPage() {
     document.title = "Financial Insights | Dream Dollar Admin";
   }, []);
 
-  const handleSearchChange = (val: string) => {
-    setParams({ search: val, page: 1 });
-  };
+  const handleSearchChange = React.useCallback(
+    (val: string) => {
+      setParams({ search: val, page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleStatusChange = (val: string) => {
-    setParams({ status: val, page: 1 });
-  };
+  const handleStatusChange = React.useCallback(
+    (val: string) => {
+      setParams({ status: val, page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleCategoryChange = (catId: string) => {
-    setParams({ categoryId: catId, page: 1 });
-  };
+  const handleCategoryChange = React.useCallback(
+    (catId: string) => {
+      setParams({ categoryId: catId, page: 1 });
+    },
+    [setParams]
+  );
 
+  const handleResetFilters = React.useCallback(() => {
+    setParams({
+      search: "",
+      status: "all",
+      categoryId: "all",
+      page: 1,
+    });
+  }, [setParams]);
   // TanStack Query for insights
   const {
     data: response,
@@ -109,7 +126,7 @@ export default function InsightsPage() {
           <div className="flex items-center gap-2">
             <AlertCircle className="size-4 shrink-0 text-rose-600" />
             <span>
-              Failed to load insights: {(error as any)?.message || "Please check server connection."}
+              Failed to load insights: {(error as Error | null)?.message || "Please check server connection."}
             </span>
           </div>
           <Button
@@ -142,6 +159,7 @@ export default function InsightsPage() {
         onLimitChange={(l) => setParams({ limit: l, page: 1 })}
         onRefresh={() => refetch()}
         isRefreshing={isFetching}
+        onResetFilters={handleResetFilters}
       />
     </div>
   );

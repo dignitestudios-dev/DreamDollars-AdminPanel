@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Loader2, Lightbulb, Calendar, CheckCircle2 } from "lucide-react";
+import { Plus, Loader2, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 
 const DAYS_OPTIONS: { value: DayOfWeek; label: string }[] = [
@@ -70,19 +70,23 @@ export function CreateTipDialog({
 
   const mutation = useMutation({
     mutationFn: createAdminTip,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       isSubmittingRef.current = false;
       toast.success(data?.message || "Tip created successfully!");
-      queryClient.invalidateQueries({ queryKey: ["adminTips"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["adminTips"] }),
+        queryClient.invalidateQueries({ queryKey: ["adminTipsTotalCount"] }),
+      ]);
       setOpen(false);
       resetForm();
       onSuccess?.();
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       isSubmittingRef.current = false;
-      toast.error(
-        err?.response?.data?.message || "Failed to create tip. Please try again."
-      );
+      const errorMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to create tip. Please try again.";
+      toast.error(errorMsg);
     },
   });
 
@@ -163,10 +167,12 @@ export function CreateTipDialog({
           </div>
 
           {/* Description */}
-          <div className="space-y-1.5">
+
+          <div className="w-full min-w-0 max-w-full space-y-1.5 overflow-hidden">
             <Label htmlFor="tip-desc" className="text-xs font-semibold">
               Tip Description / Advice <span className="text-rose-500">*</span>
             </Label>
+
             <Textarea
               id="tip-desc"
               placeholder="e.g., Audit recurring subscriptions every quarter to cancel unused services."
@@ -175,90 +181,91 @@ export function CreateTipDialog({
               disabled={mutation.isPending}
               maxLength={1500}
               rows={4}
-                className="h-[130px] min-h-[130px] max-h-[130px] resize-none text-xs leading-relaxed whitespace-pre-wrap break-words overflow-y-auto"
-
+              className="!block !w-full !min-w-0 !max-w-full !h-[130px] !min-h-[130px] !max-h-[130px] resize-none text-xs leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] break-all overflow-x-hidden overflow-y-auto"
             />
+
             <p className="text-[11px] text-muted-foreground">
               Provide clear, actionable, high-value financial guidance for app users.
             </p>
           </div>
 
+
           {/* Day of Week & Status */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-  {/* Broadcast Day */}
-  <div className="grid gap-1.5 min-w-0">
-    <Label
-      htmlFor="tip-day"
-      className="h-4 text-xs font-semibold leading-4"
-    >
-      Broadcast Day <span className="text-rose-500">*</span>
-    </Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+            {/* Broadcast Day */}
+            <div className="grid gap-1.5 min-w-0">
+              <Label
+                htmlFor="tip-day"
+                className="h-4 text-xs font-semibold leading-4"
+              >
+                Broadcast Day <span className="text-rose-500">*</span>
+              </Label>
 
-    <Select
-      value={dayOfWeek}
-      onValueChange={(val) => setDayOfWeek(val as DayOfWeek)}
-      disabled={mutation.isPending}
-    >
-      <SelectTrigger
-        id="tip-day"
-        className="h-10 w-full text-xs capitalize"
-      >
-        <SelectValue placeholder="Select day" />
-      </SelectTrigger>
+              <Select
+                value={dayOfWeek}
+                onValueChange={(val) => setDayOfWeek(val as DayOfWeek)}
+                disabled={mutation.isPending}
+              >
+                <SelectTrigger
+                  id="tip-day"
+                  className="h-10 w-full text-xs capitalize"
+                >
+                  <SelectValue placeholder="Select day" />
+                </SelectTrigger>
 
-      <SelectContent>
-        {DAYS_OPTIONS.map((opt) => (
-          <SelectItem
-            key={opt.value}
-            value={opt.value}
-            className="text-xs capitalize"
-          >
-            {opt.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
+                <SelectContent>
+                  {DAYS_OPTIONS.map((opt) => (
+                    <SelectItem
+                      key={opt.value}
+                      value={opt.value}
+                      className="text-xs capitalize"
+                    >
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-  {/* Status */}
-  <div className="grid gap-1.5 min-w-0">
-    <Label
-      htmlFor="tip-status"
-      className="h-4 text-xs font-semibold leading-4"
-    >
-      Status
-    </Label>
+            {/* Status */}
+            <div className="grid gap-1.5 min-w-0">
+              <Label
+                htmlFor="tip-status"
+                className="h-4 text-xs font-semibold leading-4"
+              >
+                Status
+              </Label>
 
-    <Select
-      value={status}
-      onValueChange={(val) => setStatus(val as TipStatus)}
-      disabled={mutation.isPending}
-    >
-      <SelectTrigger
-        id="tip-status"
-        className="h-10 w-full text-xs"
-      >
-        <SelectValue placeholder="Select status" />
-      </SelectTrigger>
+              <Select
+                value={status}
+                onValueChange={(val) => setStatus(val as TipStatus)}
+                disabled={mutation.isPending}
+              >
+                <SelectTrigger
+                  id="tip-status"
+                  className="h-10 w-full text-xs"
+                >
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
 
-      <SelectContent>
-        <SelectItem value="active" className="text-xs">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-            Active
-          </span>
-        </SelectItem>
+                <SelectContent>
+                  <SelectItem value="active" className="text-xs">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                      Active
+                    </span>
+                  </SelectItem>
 
-        <SelectItem value="inactive" className="text-xs">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0" />
-            Inactive
-          </span>
-        </SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-</div>
+                  <SelectItem value="inactive" className="text-xs">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0" />
+                      Inactive
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <DialogFooter className="pt-3 gap-2">
             <Button
               type="button"

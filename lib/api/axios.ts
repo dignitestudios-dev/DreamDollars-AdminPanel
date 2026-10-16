@@ -20,28 +20,34 @@ API.interceptors.request.use(
   async (config) => {
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("authToken");
+
       if (token) {
         config.headers.authorization = `Bearer ${token}`;
       }
 
-      // Dynamically attach device fingerprint unique ID and device model
-      if (!config.headers["deviceuniqueid"]) {
-        config.headers["deviceuniqueid"] = await getDeviceId();
-      }
-      if (!config.headers["devicemodel"]) {
-        config.headers["devicemodel"] = getDeviceModel();
+      config.headers["deviceuniqueid"] = await getDeviceId();
+      config.headers["devicemodel"] = getDeviceModel();
+
+      const fcmToken = localStorage.getItem("fcmToken");
+      if (fcmToken) {
+        config.headers["fcmtoken"] = fcmToken;
+        config.headers["fcm-token"] = fcmToken;
+        config.headers["devicetoken"] = fcmToken;
       }
     } else {
-      if (!config.headers["deviceuniqueid"]) {
-        config.headers["deviceuniqueid"] = "server-instance";
-      }
-      if (!config.headers["devicemodel"]) {
-        config.headers["devicemodel"] = "Next.js Server";
+      config.headers["deviceuniqueid"] = "server-instance";
+      config.headers["devicemodel"] = "Next.js Server";
+    }
+
+    if (typeof window !== "undefined") {
+      console.log("Device Unique ID:", config.headers["deviceuniqueid"]);
+      console.log("Device Model:", config.headers["devicemodel"]);
+      if (config.headers["fcmtoken"]) {
+        console.log("FCM Token:", config.headers["fcmtoken"]);
       }
     }
 
-    // When sending FormData, let browser/Axios set multipart/form-data with proper boundary
-    if (config.data instanceof FormData) {
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
       delete config.headers["Content-Type"];
     }
 

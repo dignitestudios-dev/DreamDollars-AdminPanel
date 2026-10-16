@@ -90,22 +90,18 @@ export default function UserDetailPage() {
 
   const formattedJoinedDate = profile?.joinedDate
     ? new Date(profile.joinedDate).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
     : "—";
 
   const formattedLastActive = insights?.lastActiveAt
     ? new Date(insights.lastActiveAt).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
     : "—";
 
   const handleToggleStatus = async () => {
@@ -363,11 +359,10 @@ export default function UserDetailPage() {
                   {/* Account Status Badge */}
                   <Badge
                     variant="outline"
-                    className={`text-xs capitalize font-medium ${
-                      profile.accountStatus === "active"
+                    className={`text-xs capitalize font-medium ${profile.accountStatus === "active"
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
                         : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800"
-                    }`}
+                      }`}
                   >
                     Status: {profile.accountStatus || "unknown"}
                   </Badge>

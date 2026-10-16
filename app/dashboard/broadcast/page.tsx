@@ -31,17 +31,19 @@ export default function BroadcastPage() {
   const {
     data: response,
     isLoading,
-    isError,
-    error,
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ["broadcastNotifications", { page, limit }],
-    queryFn: () => getBroadcastNotifications({ page, limit }),
+    queryKey: ["broadcastNotifications", { page, limit, search }],
+    queryFn: () => getBroadcastNotifications({ page, limit, search }),
     retry: false, // Prevent infinite retries if backend has SQL query error
+    placeholderData: (previousData) => previousData,
   });
 
-  const serverBroadcasts: BroadcastRecord[] = response?.data ?? [];
+  const serverBroadcasts: BroadcastRecord[] = React.useMemo(
+    () => response?.data ?? [],
+    [response?.data]
+  );
 
   // Merge server broadcasts with locally sent broadcasts in the current session
   const allBroadcasts = React.useMemo(() => {
@@ -69,6 +71,22 @@ export default function BroadcastPage() {
     localBroadcasts.filter(
       (b) => !new Set(serverBroadcasts.map((sb) => sb.id)).has(b.id)
     ).length;
+
+  const handleSearchChange = React.useCallback(
+    (s: string) => setParams({ search: s, page: 1 }),
+    [setParams]
+  );
+  const handlePageChange = React.useCallback(
+    (p: number) => setParams({ page: p }),
+    [setParams]
+  );
+  const handleLimitChange = React.useCallback(
+    (l: number) => setParams({ limit: l, page: 1 }),
+    [setParams]
+  );
+  const handleRefresh = React.useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full pb-12">
@@ -103,12 +121,12 @@ export default function BroadcastPage() {
         pagination={response?.pagination}
         isLoading={isLoading && localBroadcasts.length === 0}
         search={search}
-        onSearchChange={(s) => setParams({ search: s, page: 1 })}
+        onSearchChange={handleSearchChange}
         page={page}
-        onPageChange={(p) => setParams({ page: p })}
+        onPageChange={handlePageChange}
         limit={limit}
-        onLimitChange={(l) => setParams({ limit: l, page: 1 })}
-        onRefresh={() => refetch()}
+        onLimitChange={handleLimitChange}
+        onRefresh={handleRefresh}
         isRefreshing={isFetching}
         onBroadcastCreated={handleBroadcastSent}
       />

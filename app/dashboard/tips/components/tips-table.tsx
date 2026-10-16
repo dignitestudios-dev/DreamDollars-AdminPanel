@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -10,13 +10,10 @@ import {
   RefreshCw,
   Lightbulb,
   Calendar,
-  Clock,
   Edit,
   Trash2,
   Eye,
   AlertTriangle,
-  CheckCircle2,
-  Filter,
   ShieldAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +55,7 @@ import { AdminTip, TipsPagination, deleteAdminTip } from "@/lib/api/tips.api";
 import { EditTipDialog } from "./edit-tip-dialog";
 import { CreateTipDialog } from "./create-tip-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useSearch } from "@/hooks/use-search";
 
 interface TipsTableProps {
   tips: AdminTip[];
@@ -107,57 +104,68 @@ export function TipsTable({
   isRefreshing = false,
   totalTipsCount,
 }: TipsTableProps) {
-  const [searchInput, setSearchInput] = useState(search);
-  const debouncedSearch = useDebounce(searchInput, 400);
+  const {
+    query: searchInput,
+    handleInputChange,
+    clear: handleClearSearch,
+  } = useSearch({
+    value: search,
+    onChange: onSearchChange,
+    delay: 400,
+  });
+
   const [editingTip, setEditingTip] = useState<AdminTip | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [deletingTip, setDeletingTip] = useState<AdminTip | null>(null);
-
   const queryClient = useQueryClient();
 
   // Safety rule: At least one tip must remain in the system
   const isDeleteProtected = totalTipsCount <= 1;
-
-  // Sync internal search input with external prop
-  useEffect(() => {
-    setSearchInput(search);
-  }, [search]);
-
-  useEffect(() => {
-    if (debouncedSearch !== search) {
-      onSearchChange(debouncedSearch.trim());
-    }
-  }, [debouncedSearch, search, onSearchChange]);
-
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAdminTip(id),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success(data?.message || "Tip deleted successfully");
-      queryClient.invalidateQueries({ queryKey: ["adminTips"] });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["adminTips"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["adminTipsTotalCount"],
+        }),
+      ]);
+
+      onRefresh();
       setDeletingTip(null);
     },
-    onError: (err: any) => {
-      toast.error(
-        err?.response?.data?.message || "Failed to delete tip. Please try again."
-      );
+    onError: (err: unknown) => {
+      const errorMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to delete tip. Please try again.";
+      toast.error(errorMsg);
     },
   });
 
   const handleDeleteConfirm = () => {
-    if (isDeleteProtected) {
+    if (deleteMutation.isPending) return;
+
+    if (totalTipsCount <= 1) {
       toast.error(
         "Cannot delete: At least one tip must remain in the system for daily notifications."
       );
       setDeletingTip(null);
       return;
     }
+
     if (deletingTip) {
       deleteMutation.mutate(deletingTip.id);
     }
   };
 
   const totalPages = pagination?.totalPages || 1;
-  const totalItems = pagination?.totalItems ?? totalTipsCount;
+  const totalItems =
+    pagination?.totalItems ??
+    pagination?.total ??
+    (pagination?.count as number | undefined) ??
+    totalTipsCount;
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "-";
@@ -182,17 +190,14 @@ export function TipsTable({
           <Input
             placeholder="Search tips by title or content..."
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={handleInputChange}
             className="pl-9 pr-8 text-xs h-9 bg-background"
           />
           {searchInput && (
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => {
-                setSearchInput("");
-                onSearchChange("");
-              }}
+              onClick={handleClearSearch}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="size-3.5" />
@@ -276,7 +281,7 @@ export function TipsTable({
       </div>
 
       {/* Safety Banner (Notice when only 1 tip exists) */}
-      {isDeleteProtected && !isLoading && tips.length > 0 && (
+      {totalTipsCount <= 1 && !isLoading && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
           <ShieldAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span>
@@ -364,23 +369,23 @@ export function TipsTable({
                     className="hover:bg-muted/40 transition-colors group"
                   >
                     {/* Tip Information */}
-               <TableCell className="py-3 w-[40%] max-w-[400px]">
-  <div className="space-y-1 min-w-0 max-w-full">
-    <Link
-      href={`/dashboard/tips/${tip.id}`}
-      title={tip.title}
-      className="font-semibold text-sm text-foreground hover:text-[#649809] transition-colors flex items-start gap-1.5 min-w-0"
-    >
-      <span className="break-words whitespace-normal line-clamp-2">
-  {tip.title}
-</span>
-    </Link>
+                    <TableCell className="py-3 w-[40%] max-w-[400px]">
+                      <div className="space-y-1 min-w-0 max-w-full">
+                        <Link
+                          href={`/dashboard/tips/${tip.id}`}
+                          title={tip.title}
+                          className="font-semibold text-sm text-foreground hover:text-[#649809] transition-colors flex items-start gap-1.5 min-w-0"
+                        >
+                          <span className="break-words whitespace-normal line-clamp-2">
+                            {tip.title}
+                          </span>
+                        </Link>
 
-  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed break-words">
-  {tip.description}
-</p>
-  </div>
-</TableCell>
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed break-words">
+                          {tip.description}
+                        </p>
+                      </div>
+                    </TableCell>
 
                     {/* Day of Week */}
                     <TableCell className="py-3">
@@ -397,16 +402,14 @@ export function TipsTable({
                     <TableCell className="py-3">
                       <Badge
                         variant="outline"
-                        className={`text-xs font-medium border ${
-                          isActive
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                            : "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20"
-                        }`}
+                        className={`text-xs font-medium border ${isActive
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                          : "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20"
+                          }`}
                       >
                         <span
-                          className={`size-1.5 rounded-full mr-1.5 ${
-                            isActive ? "bg-emerald-500" : "bg-gray-400"
-                          }`}
+                          className={`size-1.5 rounded-full mr-1.5 ${isActive ? "bg-emerald-500" : "bg-gray-400"
+                            }`}
                         />
                         {isActive ? "Active" : "Inactive"}
                       </Badge>
@@ -477,11 +480,10 @@ export function TipsTable({
                                   size="sm"
                                   disabled={isDeleteProtected}
                                   onClick={() => setDeletingTip(tip)}
-                                  className={`h-8 w-8 p-0 cursor-pointer ${
-                                    isDeleteProtected
-                                      ? "text-muted-foreground/40 cursor-not-allowed"
-                                      : "text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                                  }`}
+                                  className={`h-8 w-8 p-0 cursor-pointer ${isDeleteProtected
+                                    ? "text-muted-foreground/40 cursor-not-allowed"
+                                    : "text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                    }`}
                                 >
                                   <Trash2 className="size-4" />
                                 </Button>
@@ -580,7 +582,7 @@ export function TipsTable({
             </div>
             <AlertDialogDescription className="text-xs text-muted-foreground">
               Are you sure you want to delete{" "}
-              <strong className="text-foreground">
+              <strong className="text-foreground break-all">
                 &quot;{deletingTip?.title}&quot;
               </strong>
               ? This action cannot be undone and users will no longer receive this tip.

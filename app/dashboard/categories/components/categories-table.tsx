@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Search,
   X,
@@ -53,7 +53,7 @@ import { CreateCategoryDialog } from "./create-category-dialog";
 import { EditCategoryDialog } from "./edit-category-dialog";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useSearch } from "@/hooks/use-search";
 import { EmptyState } from "@/components/ui/empty-state";
 
 interface CategoriesTableProps {
@@ -95,27 +95,22 @@ export function CategoriesTable({
   onRefresh,
   isRefreshing = false,
 }: CategoriesTableProps) {
-  const [searchInput, setSearchInput] = useState(search);
+  const {
+    query: searchInput,
+    handleInputChange,
+    clear: handleClearSearch,
+  } = useSearch({
+    value: search,
+    onChange: onSearchChange,
+    delay: 400,
+  });
+
   const [editingCategory, setEditingCategory] = useState<AdminCategory | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<AdminCategory | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
-
-  const debouncedSearch = useDebounce(searchInput, 400);
-
-  useEffect(() => {
-    setSearchInput(search);
-  }, [search]);
-
-  // Debounce search with trimmed value
-  useEffect(() => {
-    const trimmed = debouncedSearch.trim();
-    if (trimmed !== search) {
-      onSearchChange(trimmed);
-    }
-  }, [debouncedSearch, search, onSearchChange]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAdminCategory(id),
@@ -127,8 +122,11 @@ export function CategoriesTable({
       setCategoryToDelete(null);
       onRefresh();
     },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || "Failed to delete category");
+    onError: (err: unknown) => {
+      const errorMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to delete category";
+      toast.error(errorMsg);
     },
   });
 
@@ -227,16 +225,13 @@ onClick={(e) => {
           <Input
             placeholder="Search categories by name..."
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={handleInputChange}
             className="pl-9 pr-9 h-9 text-sm bg-white dark:bg-card border-border focus-visible:ring-[#649809]"
           />
           {searchInput && (
             <button
               aria-label="Clear search query"
-              onClick={() => {
-                setSearchInput("");
-                onSearchChange("");
-              }}
+              onClick={handleClearSearch}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="size-4" />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   EllipsisVertical,
@@ -50,7 +50,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AdminUser, UsersPagination, updateUserStatus } from "@/lib/api/users.api";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useSearch } from "@/hooks/use-search";
 
 interface DataTableProps {
   users: AdminUser[];
@@ -101,9 +101,17 @@ export function DataTable({
 }: DataTableProps) {
   const router = useRouter();
 
-  // Local state for search debouncing
-  const [searchInput, setSearchInput] = useState(search);
-  const debouncedSearch = useDebounce(searchInput, 400);
+  // Unified search hook with debounce and safe clearing
+  const {
+    query: searchInput,
+    handleInputChange,
+    clear: handleClearSearch,
+  } = useSearch({
+    value: search,
+    onChange: onSearchChange,
+    delay: 400,
+  });
+
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
 
   // Date range filter state
@@ -112,18 +120,6 @@ export function DataTable({
   const [showDateFilter, setShowDateFilter] = useState(
     Boolean(startDate || endDate)
   );
-
-  // Sync external search change
-  useEffect(() => {
-    setSearchInput(search);
-  }, [search]);
-
-  // Debounced search trigger
-  useEffect(() => {
-    if (debouncedSearch !== search) {
-      onSearchChange(debouncedSearch.trim());
-    }
-  }, [debouncedSearch, search, onSearchChange]);
 
   const handleApplyDateRange = () => {
     onDateRangeChange(
@@ -139,8 +135,7 @@ export function DataTable({
   };
 
   const handleResetAllFilters = () => {
-    setSearchInput("");
-    onSearchChange("");
+    handleClearSearch();
     onStatusChange("all");
     onSubscribedChange("all");
     setDraftStartDate("");
@@ -181,10 +176,11 @@ export function DataTable({
         `User status changed to ${statusLabel}`
       );
       onRefresh();
-    } catch (err: any) {
-      toast.error(
-        err?.response?.data?.message || "Failed to update user status"
-      );
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to update user status";
+      toast.error(errorMsg);
     } finally {
       setUpdatingUserId(null);
     }
@@ -254,17 +250,14 @@ export function DataTable({
           <Input
             placeholder="Search by name, email..."
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={handleInputChange}
             className="pl-9 pr-9 h-9.5 text-sm bg-white dark:bg-card border-border focus-visible:ring-[#649809]"
           />
           {searchInput && (
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => {
-                setSearchInput("");
-                onSearchChange("");
-              }}
+              onClick={handleClearSearch}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
               title="Clear search"
             >
@@ -279,11 +272,10 @@ export function DataTable({
             variant="outline"
             size="sm"
             onClick={() => setShowDateFilter(!showDateFilter)}
-            className={`cursor-pointer border-border h-9 gap-1.5 ${
-              startDate || endDate
-                ? "bg-[#649809]/10 text-[#649809] border-[#649809]"
-                : ""
-            }`}
+            className={`cursor-pointer border-border h-9 gap-1.5 ${startDate || endDate
+              ? "bg-[#649809]/10 text-[#649809] border-[#649809]"
+              : ""
+              }`}
           >
             <Calendar className="size-4" />
             <span>Date Range</span>
@@ -301,11 +293,21 @@ export function DataTable({
             title="Refresh user list"
           >
             <RefreshCw
-              className={`size-3.5 ${
-                isRefreshing ? "animate-spin text-[#649809]" : ""
-              }`}
+              className={`size-3.5 ${isRefreshing ? "animate-spin text-[#649809]" : ""
+                }`}
             />
             <span className="hidden sm:inline">Refresh</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportToCSV}
+            className="cursor-pointer border-border h-9 gap-1.5"
+            title="Export to CSV"
+          >
+            <Download className="size-3.5" />
+            <span className="hidden sm:inline">Export</span>
           </Button>
         </div>
       </div>
@@ -508,10 +510,10 @@ export function DataTable({
 
                   const formattedJoinDate = user.joinedDate
                     ? new Date(user.joinedDate).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
                     : "—";
 
                   const isUpdating = updatingUserId === user.id;
@@ -575,11 +577,10 @@ export function DataTable({
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`text-xs capitalize font-medium ${
-                            user.accountStatus === "active"
-                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
-                              : "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30"
-                          }`}
+                          className={`text-xs capitalize font-medium ${user.accountStatus === "active"
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                            : "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30"
+                            }`}
                         >
                           {user.accountStatus || "unknown"}
                         </Badge>

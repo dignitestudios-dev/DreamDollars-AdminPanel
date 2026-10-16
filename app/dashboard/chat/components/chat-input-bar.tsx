@@ -67,6 +67,8 @@ export function ChatInputBar({ onSendMessage, disabled = false }: ChatInputBarPr
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={disabled || isSending}
+            maxLength={1000}
+
             placeholder={
               disabled
                 ? "Select a conversation to start messaging..."

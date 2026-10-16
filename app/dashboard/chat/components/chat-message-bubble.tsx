@@ -26,15 +26,54 @@ import {
   AlertCircle,
   File,
   Eye,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+const URL_REGEX = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g;
+
+function renderMessageContent(text: string, isAdmin: boolean) {
+  if (!text) return null;
+
+  const parts = text.split(URL_REGEX);
+  if (parts.length === 1) {
+    return text;
+  }
+
+  return parts.map((part, index) => {
+    if (!part) return null;
+
+    if (/^https?:\/\//i.test(part)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "underline underline-offset-2 break-all transition-opacity cursor-pointer",
+            isAdmin
+              ? "text-primary-foreground font-medium hover:opacity-85"
+              : "text-primary font-medium hover:opacity-85"
+          )}
+        >
+          {part}
+        </a>
+      );
+    }
+
+    return part;
+  });
+}
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
   userName?: string;
   onDeleteMessage?: (messageId: string) => void;
   onPreviewAttachment?: (attachment: ChatAttachment) => void;
+  onRetryMessage?: (messageId: string) => void;
 }
 
 export function ChatMessageBubble({
@@ -42,6 +81,7 @@ export function ChatMessageBubble({
   userName = "User",
   onDeleteMessage,
   onPreviewAttachment,
+  onRetryMessage,
 }: ChatMessageBubbleProps) {
   const isAdmin = message.sender_type === "admin";
   const [copied, setCopied] = React.useState(false);
@@ -91,6 +131,15 @@ export function ChatMessageBubble({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align={isAdmin ? "end" : "start"} className="w-36">
+              {message.hasError && onRetryMessage && (
+                <DropdownMenuItem
+                  onClick={() => onRetryMessage(message.tempId || message.id)}
+                  className="gap-2 text-xs font-medium text-emerald-600 focus:text-emerald-700 cursor-pointer"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Retry send
+                </DropdownMenuItem>
+              )}
               {message.text && (
                 <DropdownMenuItem onClick={handleCopyText} className="gap-2 text-xs">
                   {copied ? (
@@ -266,7 +315,7 @@ export function ChatMessageBubble({
                 : "text-[11.5px] sm:text-xs text-foreground/90"
             )}
           >
-            {message.text}
+            {renderMessageContent(message.text, isAdmin)}
           </p>
         )}
 
@@ -282,11 +331,26 @@ export function ChatMessageBubble({
           {isAdmin && (
             <>
               {message.isOptimistic ? (
-                <Loader2 className="w-2.5 h-2.5 animate-spin opacity-80" />
-              ) : message.hasError ? (
-                <span title="Failed to send">
-                  <AlertCircle className="w-2.5 h-2.5 text-red-300" />
+                <span title="Sending...">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin opacity-80" />
                 </span>
+              ) : message.hasError ? (
+                <button
+                  type="button"
+                  title="Failed to send. Click to retry now"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onRetryMessage && (message.tempId || message.id)) {
+                      onRetryMessage(message.tempId || message.id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 hover:opacity-100 transition-opacity cursor-pointer group/retry ml-1"
+                >
+                  <span className="text-[9.5px] text-red-200 underline group-hover/retry:text-white font-medium">
+                    Retry
+                  </span>
+                  <AlertCircle className="w-2.5 h-2.5 text-red-300 group-hover/retry:text-white" />
+                </button>
               ) : null}
             </>
           )}

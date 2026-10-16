@@ -18,6 +18,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarMenuBadge,
 } from "@/components/ui/sidebar"
 
 export function NavMain({
@@ -29,6 +30,7 @@ export function NavMain({
     title: string
     url: string
     icon?: LucideIcon
+    badge?: React.ReactNode
     isActive?: boolean
     items?: {
       title: string
@@ -97,20 +99,25 @@ export function NavMain({
                   pathname === item.url ||
                   (item.url !== "/dashboard" && pathname.startsWith(item.url + "/"));
                 return (
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    className={`cursor-pointer ${isItemActive ? "pointer-events-none" : ""}`}
-                    isActive={isItemActive}
-                  >
-                    <Link
-                      href={item.url}
-                      aria-current={isItemActive ? "page" : undefined}
+                  <>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={item.title}
+                      className={`cursor-pointer ${isItemActive ? "pointer-events-none" : ""}`}
+                      isActive={isItemActive}
                     >
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
+                      <Link
+                        href={item.url}
+                        aria-current={isItemActive ? "page" : undefined}
+                      >
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    {item.badge && (
+                      <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                    )}
+                  </>
                 );
               })()}
             </SidebarMenuItem>

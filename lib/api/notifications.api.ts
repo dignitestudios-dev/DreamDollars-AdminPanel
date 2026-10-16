@@ -23,7 +23,7 @@ export interface BroadcastRecord {
   createdAt?: string;
   updatedAt?: string;
   created_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface SendBroadcastResponse {
@@ -52,6 +52,7 @@ export interface GetBroadcastsResponse {
 export interface GetBroadcastsParams {
   page?: number;
   limit?: number;
+  search?: string;
 }
 
 /**
@@ -60,7 +61,7 @@ export interface GetBroadcastsParams {
 export const sendBroadcastNotification = async (
   payload: SendBroadcastPayload
 ): Promise<SendBroadcastResponse> => {
-  const finalPayload: Record<string, any> = {
+  const finalPayload: Record<string, unknown> = {
     title: payload.title.trim(),
     message: payload.message.trim(),
     targetType: payload.targetType,
@@ -83,14 +84,17 @@ export const sendBroadcastNotification = async (
 };
 
 /**
- * Get broadcast history list with pagination
+ * Get broadcast history list with pagination and optional search
  */
 export const getBroadcastNotifications = async (
   params?: GetBroadcastsParams
 ): Promise<GetBroadcastsResponse> => {
-  const cleanParams: Record<string, any> = {};
+  const cleanParams: Record<string, string | number> = {};
   if (params?.page) cleanParams.page = params.page;
   if (params?.limit) cleanParams.limit = params.limit;
+  if (params?.search && params.search.trim()) {
+    cleanParams.search = params.search.trim();
+  }
 
   const response = await API.get<GetBroadcastsResponse>(
     "/notification/broadcasts",

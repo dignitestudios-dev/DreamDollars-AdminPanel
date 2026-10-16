@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAdminCategories, getAdminCategoryStats } from "@/lib/api/categories.api";
 import { CategoriesTable } from "./components/categories-table";
@@ -18,31 +18,43 @@ import {
 } from "lucide-react";
 
 import { useUrlState } from "@/hooks/use-url-state";
-import { useEffect } from "react";
 
 export default function CategoriesPage() {
-  const [pageStr, setPageStr] = useUrlState("page", "1");
-  const [limitStr, setLimitStr] = useUrlState("limit", "10");
-  const [search, setSearch] = useUrlState("search", "");
-  const [selectedType, setSelectedType] = useUrlState("type", "all");
+  const { values, setParams } = useUrlState({
+    page: 1,
+    limit: 10,
+    search: "",
+    type: "all",
+  });
 
-  const page = Math.max(1, parseInt(pageStr, 10) || 1);
-  const limit = Math.max(1, parseInt(limitStr, 10) || 10);
+  const page = values.page;
+  const limit = values.limit;
+  const search = values.search;
+  const selectedType = values.type;
 
-  const setPage = (p: number) => setPageStr(p.toString());
-  const setLimit = (l: number) => setLimitStr(l.toString());
+  const setPage = React.useCallback(
+    (p: number) => setParams({ page: p }),
+    [setParams]
+  );
 
-  const handleSearchChange = (val: string) => {
-    setSearch(val);
-    setPage(1);
-  };
+  const setLimit = React.useCallback(
+    (l: number) => setParams({ limit: l, page: 1 }),
+    [setParams]
+  );
 
-  const handleTypeChange = (type: string) => {
-      console.log("Selected type:", type);
+  const handleSearchChange = React.useCallback(
+    (val: string) => {
+      setParams({ search: val, page: 1 });
+    },
+    [setParams]
+  );
 
-    setSelectedType(type);
-    setPage(1);
-  };
+  const handleTypeChange = React.useCallback(
+    (type: string) => {
+      setParams({ type, page: 1 });
+    },
+    [setParams]
+  );
 
   useEffect(() => {
     document.title = "Category Management — Dream Dollar Admin";
@@ -237,7 +249,7 @@ export default function CategoriesPage() {
           <div className="flex items-center gap-2">
             <AlertCircle className="size-4 shrink-0 text-rose-600" />
             <span>
-              Failed to load categories: {(error as any)?.message || "Please check server connection."}
+              Failed to load categories: {(error as Error | null)?.message || "Please check server connection."}
             </span>
           </div>
           <Button

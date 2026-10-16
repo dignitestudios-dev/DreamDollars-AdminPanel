@@ -55,6 +55,8 @@ export function EditInsightDialog({
   trigger,
   onSuccess,
 }: EditInsightDialogProps) {
+  const MAX_THUMBNAIL_SIZE = 10.5 * 1024 * 1024; // 10 MB
+  const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100 MB
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -135,8 +137,44 @@ export function EditInsightDialog({
     }
   }, [open, insight]);
 
+  const isGifFile = (file: File) => {
+    return file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif");
+  };
+
+  const isValidThumbnailImage = (file: File) => {
+    if (isGifFile(file)) return false;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    const allowedExts = /\.(jpe?g|png|webp)$/i;
+    return allowedTypes.includes(file.type.toLowerCase()) || allowedExts.test(file.name);
+  };
+
+  const isValidMp4Video = (file: File) => {
+    if (isGifFile(file)) return false;
+    const isMp4 = file.type.toLowerCase() === "video/mp4" || file.name.toLowerCase().endsWith(".mp4");
+    return isMp4;
+  };
+
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (isGifFile(file)) {
+      toast.error("GIF format is not allowed for thumbnails. Please upload a JPG, PNG, or WEBP image.");
+      e.target.value = "";
+      return;
+    }
+
+    if (!isValidThumbnailImage(file)) {
+      toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP images are allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_THUMBNAIL_SIZE) {
+      toast.error("Thumbnail image must not exceed 10 MB.");
+      e.target.value = "";
+      return;
+    }
     if (file) {
       setThumbnailFile(file);
       const previewUrl = URL.createObjectURL(file);
@@ -157,6 +195,26 @@ export function EditInsightDialog({
 
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (isGifFile(file)) {
+      toast.error("GIF format is not allowed. Video must be in MP4 format.");
+      e.target.value = "";
+      return;
+    }
+
+    if (!isValidMp4Video(file)) {
+      toast.error("Invalid video format. Only MP4 format is allowed.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_VIDEO_SIZE) {
+      toast.error("Video file must not exceed 100 MB.");
+      e.target.value = "";
+      return;
+    }
     if (file) {
       setVideoFile(file);
     }
@@ -201,7 +259,37 @@ export function EditInsightDialog({
       toast.error("Please select a category");
       return;
     }
+    if (contentMode === "media") {
+      if (thumbnailFile) {
+        if (isGifFile(thumbnailFile)) {
+          toast.error("GIF format is not allowed for thumbnails. Please upload a JPG, PNG, or WEBP image.");
+          return;
+        }
+        if (!isValidThumbnailImage(thumbnailFile)) {
+          toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP images are allowed.");
+          return;
+        }
+        if (thumbnailFile.size > MAX_THUMBNAIL_SIZE) {
+          toast.error("Thumbnail image must not exceed 10 MB.");
+          return;
+        }
+      }
 
+      if (videoFile) {
+        if (isGifFile(videoFile)) {
+          toast.error("GIF format is not allowed. Video must be in MP4 format.");
+          return;
+        }
+        if (!isValidMp4Video(videoFile)) {
+          toast.error("Invalid video format. Only MP4 format is allowed.");
+          return;
+        }
+        if (videoFile.size > MAX_VIDEO_SIZE) {
+          toast.error("Video file must not exceed 100 MB.");
+          return;
+        }
+      }
+    }
     isSubmittingRef.current = true;
     const formData = new FormData();
     formData.append("title", title.trim());
@@ -347,7 +435,12 @@ export function EditInsightDialog({
               maxLength={500}
               rows={4}
               wrap="soft"
- className="h-[130px] min-h-[130px] max-h-[130px] resize-none text-xs leading-relaxed whitespace-pre-wrap break-words overflow-y-auto"            />
+              style={{
+                overflowWrap: "anywhere",
+                wordBreak: "break-all",
+                whiteSpace: "pre-wrap",
+              }}
+              className="!box-border block h-[130px] min-h-[130px] max-h-[130px] w-full min-w-0 max-w-full resize-none overflow-x-hidden overflow-y-auto text-xs leading-relaxed" />
           </div>
 
           {/* Content Mode Switch */}
@@ -363,11 +456,10 @@ export function EditInsightDialog({
                     setContentMode("media");
                     setExternalLink("");
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                    contentMode === "media"
-                      ? "bg-white dark:bg-card text-gray-900 dark:text-gray-100 shadow-2xs font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${contentMode === "media"
+                    ? "bg-white dark:bg-card text-gray-900 dark:text-gray-100 shadow-2xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   <Video className="size-3.5 text-[#649809]" />
                   <span>Media Upload</span>
@@ -379,11 +471,10 @@ export function EditInsightDialog({
                     handleRemoveThumbnail();
                     handleRemoveVideo();
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                    contentMode === "link"
-                      ? "bg-white dark:bg-card text-gray-900 dark:text-gray-100 shadow-2xs font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${contentMode === "link"
+                    ? "bg-white dark:bg-card text-gray-900 dark:text-gray-100 shadow-2xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   <Link2 className="size-3.5 text-blue-600" />
                   <span>External Link</span>
@@ -468,7 +559,7 @@ export function EditInsightDialog({
                         Click to upload Thumbnail Image
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        PNG, JPG, WEBP up to 10MB
+                        PNG, JPG, WEBP up to 10MB (GIFs not allowed)
                       </span>
                     </div>
                   )}
@@ -476,7 +567,7 @@ export function EditInsightDialog({
                   <input
                     ref={thumbnailInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/jpg"
                     onChange={handleThumbnailChange}
                     className="hidden"
                   />
@@ -550,7 +641,7 @@ export function EditInsightDialog({
                         Click to upload Video File
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        MP4, MOV, WEBM
+                        MP4 format only up to 100MB (No GIFs)
                       </span>
                     </div>
                   )}
@@ -558,7 +649,7 @@ export function EditInsightDialog({
                   <input
                     ref={videoInputRef}
                     type="file"
-                    accept="video/*"
+                    accept="video/mp4,.mp4"
                     onChange={handleVideoChange}
                     className="hidden"
                   />

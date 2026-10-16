@@ -1,17 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { ChatRoom } from "@/lib/api/chat.api";
+import { useSearch } from "@/hooks/use-search";
 import { formatConversationTime } from "@/lib/chat/chat-utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Search,
-  MessageSquare,
   X,
   Loader2,
-  CheckCheck,
   Inbox,
   Filter,
 } from "lucide-react";
@@ -39,17 +38,16 @@ export function ChatSidebar({
   hasMore = false,
   isLoadingMore = false,
 }: ChatSidebarProps) {
-  const [searchInput, setSearchInput] = useState("");
+  const {
+    query: searchInput,
+    handleInputChange,
+    clear: handleClearSearch,
+  } = useSearch({
+    defaultValue: "",
+    delay: 300,
+    onChange: onSearch,
+  });
   const [filterUnreadOnly, setFilterUnreadOnly] = useState(false);
-
-  // 300ms Debounce search input
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      onSearch(searchInput);
-    }, 300);
-
-    return () => clearTimeout(handler);
-  }, [searchInput, onSearch]);
 
   const filteredRooms = filterUnreadOnly
     ? rooms.filter((r) => r.admin_unread_count > 0)
@@ -100,19 +98,19 @@ export function ChatSidebar({
           </Button>
         </div>
 
-        {/* Search input with 300ms debounce */}
+        {/* Search input with debounced useSearch */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Search users or email..."
             className="pl-8 pr-7 h-8 text-xs rounded-md bg-background"
           />
           {searchInput && (
             <button
-              onClick={() => setSearchInput("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={handleClearSearch}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
             >
               <X className="h-3 w-3" />
             </button>
@@ -145,16 +143,18 @@ export function ChatSidebar({
           </div>
         ) : (
           filteredRooms.map((room) => {
-            const isSelected = selectedRoomId === room.id;
+            const roomId = String(room.id || (room as any)._id || "");
+            const isSelected = Boolean(selectedRoomId && roomId && selectedRoomId === roomId);
             const hasUnread = room.admin_unread_count > 0;
             const isLastSentByAdmin = room.last_message_sender_type === "admin";
 
             return (
-              <div
-                key={room.id}
+              <button
+                key={roomId || room.id}
+                type="button"
                 onClick={() => onSelectRoom(room)}
                 className={cn(
-                  "flex items-start gap-2.5 p-2.5 sm:px-3 sm:py-2.5 cursor-pointer transition-colors select-none text-left relative",
+                  "w-full flex items-start gap-2.5 p-2.5 sm:px-3 sm:py-2.5 cursor-pointer transition-colors select-none text-left relative",
                   isSelected
                     ? "bg-primary/10 border-l-3 border-l-primary"
                     : "hover:bg-accent/40"
@@ -223,7 +223,7 @@ export function ChatSidebar({
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })
         )}

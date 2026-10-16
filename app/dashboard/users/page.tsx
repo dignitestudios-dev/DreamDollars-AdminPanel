@@ -37,25 +37,40 @@ export default function UsersPage() {
   }, []);
 
   // Reset page to 1 when filters change
-  const handleSearchChange = (val: string) => {
-    setParams({ search: val, page: 1 });
-  };
+  const handleSearchChange = React.useCallback(
+    (val: string) => {
+      setParams({ search: val, page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleStatusChange = (val: string) => {
-    setParams({ status: val, page: 1 });
-  };
+  const handleStatusChange = React.useCallback(
+    (val: string) => {
+      setParams({ status: val, page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleSubscribedChange = (val: string) => {
-    setParams({ isSubscribed: val, page: 1 });
-  };
+  const handleSubscribedChange = React.useCallback(
+    (val: string) => {
+      setParams({ isSubscribed: val, page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleDateRangeChange = (start?: string, end?: string) => {
-    setParams({ startDate: start || "", endDate: end || "", page: 1 });
-  };
+  const handleDateRangeChange = React.useCallback(
+    (start?: string, end?: string) => {
+      setParams({ startDate: start || "", endDate: end || "", page: 1 });
+    },
+    [setParams]
+  );
 
-  const handleSortChange = (field: string, newOrder: "asc" | "desc") => {
-    setParams({ sortBy: field, order: newOrder, page: 1 });
-  };
+  const handleSortChange = React.useCallback(
+    (field: string, newOrder: "asc" | "desc") => {
+      setParams({ sortBy: field, order: newOrder, page: 1 });
+    },
+    [setParams]
+  );
 
   // TanStack Query for users list
   const {
@@ -125,7 +140,7 @@ export default function UsersPage() {
           <div className="flex items-center gap-2">
             <AlertCircle className="size-4 shrink-0 text-rose-600" />
             <span>
-              Failed to load user list: {(error as any)?.message || "Please check server connection."}
+              Failed to load user list: {(error as Error | null)?.message || "Please check server connection."}
             </span>
           </div>
           <Button

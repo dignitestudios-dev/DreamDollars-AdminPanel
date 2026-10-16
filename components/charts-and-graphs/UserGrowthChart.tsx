@@ -1,11 +1,12 @@
+
 "use client";
 
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   getUserGrowth,
-  UserGrowthParams,
-  UserGrowthSummary,
+  type UserGrowthParams,
+  type UserGrowthSummary,
 } from "@/lib/api/dashboard.api";
 import {
   Area,
@@ -53,25 +54,66 @@ const chartConfig = {
 type FilterMode = "monthly" | "yearly" | "range";
 
 export function UserGrowthChart() {
-  const currentYear = new Date().getFullYear();
-  const [filterType, setFilterType] = useState<FilterMode>("monthly");
-  const [year, setYear] = useState<number>(currentYear);
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const today = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-  // Separate draft dates (while user is selecting) from applied dates (which fire API)
-  const [draftStartDate, setDraftStartDate] = useState<string>("2026-01-01");
-  const [draftEndDate, setDraftEndDate] = useState<string>("2026-12-31");
-  const [appliedStartDate, setAppliedStartDate] = useState<string>("2026-01-01");
-  const [appliedEndDate, setAppliedEndDate] = useState<string>("2026-12-31");
+  const [filterType, setFilterType] =
+    useState<FilterMode>("monthly");
 
-  // Construct query params using applied dates
-  const queryParams: UserGrowthParams = {
-    ...(filterType === "monthly" ? { filterType: "monthly", year } : {}),
-    ...(filterType === "yearly" ? { filterType: "yearly" } : {}),
-    ...(filterType === "range"
-      ? { startDate: appliedStartDate, endDate: appliedEndDate }
-      : {}),
-  };
+  const [year] = useState<number>(currentYear);
 
+  const [draftStartDate, setDraftStartDate] =
+    useState<string>(`${currentYear}-01-01`);
+
+  const [draftEndDate, setDraftEndDate] =
+    useState<string>(today);
+
+  const [appliedStartDate, setAppliedStartDate] =
+    useState<string>(`${currentYear}-01-01`);
+
+  const [appliedEndDate, setAppliedEndDate] =
+    useState<string>(today);
+
+  // Yearly view uses monthly breakdown for the selected year.
+  // This gives the chart 12 points instead of one annual point.
+  const queryParams: UserGrowthParams = useMemo(() => {
+    if (filterType === "range") {
+      const start = new Date(`${appliedStartDate}T00:00:00`);
+      const end = new Date(`${appliedEndDate}T00:00:00`);
+
+      const rangeDays =
+        Math.floor(
+          (end.getTime() - start.getTime()) /
+          (1000 * 60 * 60 * 24)
+        ) + 1;
+
+      const granularity =
+        rangeDays <= 30
+          ? "daily"
+          : rangeDays <= 180
+            ? "weekly"
+            : rangeDays <= 730
+              ? "monthly"
+              : "yearly";
+
+      return {
+        startDate: appliedStartDate,
+        endDate: appliedEndDate,
+        granularity,
+      } as UserGrowthParams;
+    }
+
+    return {
+      filterType: "monthly",
+      year,
+    };
+  }, [
+    filterType,
+    year,
+    appliedStartDate,
+    appliedEndDate,
+  ]);
   const {
     data: growthResponse,
     isLoading,
@@ -82,11 +124,10 @@ export function UserGrowthChart() {
     queryKey: [
       "userGrowth",
       filterType,
-      filterType === "monthly"
-        ? year
-        : filterType === "range"
+      year,
+      filterType === "range"
         ? `${appliedStartDate}_${appliedEndDate}`
-        : "all",
+        : "full-year",
     ],
     queryFn: () => getUserGrowth(queryParams),
   });
@@ -96,70 +137,167 @@ export function UserGrowthChart() {
       toast.error("Please select both start and end dates");
       return;
     }
+
     if (draftStartDate > draftEndDate) {
       toast.error("Start date cannot be after end date");
       return;
     }
+
+    // Do not present future periods as completed reporting data.
+    if (draftStartDate > today) {
+      toast.error("Future date ranges are not available for reporting");
+      return;
+    }
+
+    if (draftEndDate > today) {
+      toast.error("End date cannot be in the future. Select today or an earlier date.");
+      return;
+    }
+
     setAppliedStartDate(draftStartDate);
     setAppliedEndDate(draftEndDate);
   };
 
   const handleClearDateRange = () => {
     const defaultStart = `${currentYear}-01-01`;
-    const defaultEnd = `${currentYear}-12-31`;
+    const defaultEnd = today;
+
     setDraftStartDate(defaultStart);
     setDraftEndDate(defaultEnd);
     setAppliedStartDate(defaultStart);
     setAppliedEndDate(defaultEnd);
     setFilterType("monthly");
+
     toast.info("Date filter cleared, switched to Monthly view");
   };
 
-  // Safely extract payload and summary
+  // Normalize API response.
   const payload = growthResponse?.data ?? growthResponse;
-  const summary: UserGrowthSummary | undefined = payload?.summary;
 
-  // Normalize chart data points
+  const summary: UserGrowthSummary | undefined =
+    payload?.summary;
+
   const chartData = useMemo(() => {
     if (!payload) return [];
+
     let list: any[] = [];
+
     if (Array.isArray(payload.chart)) {
       list = payload.chart;
     } else if (Array.isArray(payload)) {
       list = payload;
-    } else if (Array.isArray(payload.data)) {
-      list = payload.data;
     } else if (Array.isArray(payload.data?.chart)) {
       list = payload.data.chart;
+    } else if (Array.isArray(payload.data)) {
+      list = payload.data;
     }
 
     return list.map((item) => ({
       period: item.period || "",
-      label: item.label || String(item.year || item.month || ""),
+      label: item.label || String(item.year ?? item.month ?? ""),
       newUsers: Number(item.newUsers ?? item.count ?? 0),
       totalUsers: Number(item.totalUsers ?? 0),
     }));
   }, [payload]);
 
-  // Derived metrics
+
+  const displayChartData = useMemo(() => {
+    // In Monthly view, omit future months and explicitly mark the current
+    // month as partial so it is not mistaken for a completed month.
+    if (filterType === "monthly") {
+      const currentPeriod = today.slice(0, 7);
+
+      return chartData
+        .filter((point) => {
+          const match = point.period.match(/^(\d{4})-(\d{2})$/);
+          // If the API period is not YYYY-MM, preserve it rather than silently
+          // removing a record that may still be valid.
+          return !match || point.period <= currentPeriod;
+        })
+        .map((point) =>
+          point.period === currentPeriod
+            ? { ...point, label: `${point.label} (Partial)` }
+            : point
+        );
+    }
+
+    // Keep monthly resolution for shorter date ranges. For long ranges,
+    // aggregate monthly API records into calendar quarters to avoid crowding.
+    if (filterType !== "range" || chartData.length <= 36) {
+      return chartData;
+    }
+
+    const groups = new Map<string, typeof chartData>();
+
+    chartData.forEach((point) => {
+      const match = point.period.match(/^(\d{4})-(\d{2})$/);
+      if (!match) {
+        // Do not silently lose records if the API uses a different period format.
+        const fallbackKey = point.period || point.label;
+        const fallbackGroup = groups.get(fallbackKey) ?? [];
+        fallbackGroup.push(point);
+        groups.set(fallbackKey, fallbackGroup);
+        return;
+      }
+
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      if (month < 1 || month > 12) return;
+
+      const quarter = Math.ceil(month / 3);
+      const key = `${year}-Q${quarter}`;
+      const group = groups.get(key) ?? [];
+      group.push(point);
+      groups.set(key, group);
+    });
+
+    return Array.from(groups.entries()).map(([label, points]) => {
+      const orderedPoints = [...points].sort((a, b) =>
+        a.period.localeCompare(b.period)
+      );
+
+      return {
+        period: label,
+        label,
+        newUsers: orderedPoints.reduce(
+          (sum, point) => sum + point.newUsers,
+          0
+        ),
+        // Cumulative users are not summed; use the final month's value.
+        totalUsers: orderedPoints[orderedPoints.length - 1]?.totalUsers ?? 0,
+      };
+    });
+  }, [filterType, chartData, today]);
+
+  // Dots are useful for short ranges but overlap on long date ranges.
+  // Keep active dots so individual points remain inspectable on hover.
+  const showDataDots = displayChartData.length <= 36;
+
+
   const totalNewUsers = useMemo(() => {
     if (summary?.totalNewUsersInRange !== undefined) {
       return summary.totalNewUsersInRange;
     }
-    return chartData.reduce((acc, curr) => acc + curr.newUsers, 0);
+
+    return chartData.reduce(
+      (total, item) => total + item.newUsers,
+      0
+    );
   }, [summary, chartData]);
 
   const totalUsersAtEnd = useMemo(() => {
     if (summary?.totalUsersAtEnd !== undefined) {
       return summary.totalUsersAtEnd;
     }
+
     if (chartData.length === 0) return 0;
-    return chartData[chartData.length - 1].totalUsers || totalNewUsers;
-  }, [summary, chartData, totalNewUsers]);
+
+    return chartData[chartData.length - 1].totalUsers;
+  }, [summary, chartData]);
 
   const peakNewUsers = useMemo(() => {
     return chartData.reduce(
-      (max, curr) => (curr.newUsers > max ? curr.newUsers : max),
+      (max, item) => Math.max(max, item.newUsers),
       0
     );
   }, [chartData]);
@@ -172,31 +310,32 @@ export function UserGrowthChart() {
             <div className="h-7 w-7 rounded-lg bg-[#649809]/10 flex items-center justify-center shrink-0">
               <Users className="h-4 w-4 text-[#649809]" />
             </div>
+
             <CardTitle className="text-base font-bold text-gray-900">
               User Growth
             </CardTitle>
           </div>
+
           <CardDescription className="text-xs text-gray-500 mt-1">
             New and cumulative user growth over time
           </CardDescription>
         </div>
 
-        {/* Filter Controls */}
+        {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Monthly / Yearly / Date Range Switch */}
           <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 text-xs">
             <button
               type="button"
               onClick={() => setFilterType("monthly")}
-              className={`py-1 px-3 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                filterType === "monthly"
-                  ? "bg-white text-[#649809] font-bold shadow-xs"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
+              className={`py-1 px-3 rounded-md text-xs font-medium transition-all cursor-pointer ${filterType === "monthly"
+                ? "bg-white text-[#649809] font-bold shadow-xs"
+                : "text-gray-500 hover:text-gray-900"
+                }`}
             >
               Monthly
             </button>
-            <button
+
+            {/* <button
               type="button"
               onClick={() => setFilterType("yearly")}
               className={`py-1 px-3 rounded-md text-xs font-medium transition-all cursor-pointer ${
@@ -206,54 +345,51 @@ export function UserGrowthChart() {
               }`}
             >
               Yearly
-            </button>
+            </button> */}
+
             <button
               type="button"
               onClick={() => setFilterType("range")}
-              className={`py-1 px-3 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                filterType === "range"
-                  ? "bg-white text-[#649809] font-bold shadow-xs"
-                  : "text-gray-500 hover:text-gray-900"
-              }`}
+              className={`py-1 px-3 rounded-md text-xs font-medium transition-all cursor-pointer ${filterType === "range"
+                ? "bg-white text-[#649809] font-bold shadow-xs"
+                : "text-gray-500 hover:text-gray-900"
+                }`}
             >
               Date Range
             </button>
           </div>
 
-          {/* Year selector (only visible for Monthly) */}
-          {/* {filterType === "monthly" && (
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="h-8 text-xs font-medium bg-white border border-border rounded-lg px-2.5 text-gray-700 outline-none focus:ring-1 focus:ring-[#649809] cursor-pointer"
-            >
-              <option value={2026}>2026</option>
-              <option value={2025}>2025</option>
-              <option value={2024}>2024</option>
-              <option value={2023}>2023</option>
-            </select>
-          )} */}
-
-          {/* Date range pickers (visible when range is active) */}
+          {/* Date range controls */}
           {filterType === "range" && (
             <div className="flex flex-wrap items-center gap-2 bg-white px-2 py-1 rounded-lg border border-border">
               <div className="flex items-center gap-1.5">
                 <input
                   type="date"
                   value={draftStartDate}
-                  onChange={(e) => setDraftStartDate(e.target.value)}
+                  max={today}
+                  onChange={(e) =>
+                    setDraftStartDate(e.target.value)
+                  }
                   className="h-8 text-xs px-2.5 rounded-md bg-white border border-border text-gray-700 outline-none focus:ring-1 focus:ring-[#649809] cursor-pointer"
                   title="Start Date"
                 />
-                <span className="text-xs text-gray-400 font-medium px-0.5">to</span>
+
+                <span className="text-xs text-gray-400 font-medium px-0.5">
+                  to
+                </span>
+
                 <input
                   type="date"
                   value={draftEndDate}
-                  onChange={(e) => setDraftEndDate(e.target.value)}
+                  max={today}
+                  onChange={(e) =>
+                    setDraftEndDate(e.target.value)
+                  }
                   className="h-8 text-xs px-2.5 rounded-md bg-white border border-border text-gray-700 outline-none focus:ring-1 focus:ring-[#649809] cursor-pointer"
                   title="End Date"
                 />
               </div>
+
               <Button
                 type="button"
                 size="sm"
@@ -263,6 +399,7 @@ export function UserGrowthChart() {
               >
                 Apply
               </Button>
+
               <Button
                 type="button"
                 size="sm"
@@ -284,19 +421,23 @@ export function UserGrowthChart() {
             onClick={() => refetch()}
             disabled={isFetching}
             className="h-8 w-8 p-0 cursor-pointer text-gray-500 hover:text-gray-900"
+            aria-label="Refresh user growth chart"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-[#649809]" : ""}`}
+              className={`h-3.5 w-3.5 ${isFetching
+                ? "animate-spin text-[#649809]"
+                : ""
+                }`}
             />
           </Button>
         </div>
       </CardHeader>
 
       <CardContent className="pt-2">
-        {/* Loading state */}
         {isLoading ? (
           <div className="space-y-3 py-4">
             <Skeleton className="h-60 w-full rounded-lg" />
+
             <div className="flex justify-between">
               <Skeleton className="h-4 w-32" />
               <Skeleton className="h-4 w-28" />
@@ -307,6 +448,7 @@ export function UserGrowthChart() {
             <p className="text-xs text-red-500 mb-2">
               Failed to load user growth data
             </p>
+
             <Button
               size="sm"
               variant="outline"
@@ -319,50 +461,80 @@ export function UserGrowthChart() {
         ) : chartData.length === 0 ? (
           <div className="h-60 flex flex-col items-center justify-center text-center text-gray-400">
             <Calendar className="h-8 w-8 text-gray-300 mb-2" />
-            <p className="text-xs font-medium">No user growth records found</p>
+
+            <p className="text-xs font-medium">
+              No user growth records found
+            </p>
+
             <p className="text-[11px] text-gray-400">
-              Try selecting a different year
+              Try selecting a different date range
             </p>
           </div>
         ) : (
           <div>
-            {/* Chart Legend */}
+            {/* Chart legend */}
             <div className="flex items-center gap-4 mb-2 text-xs text-gray-500 justify-end">
               <div className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#649809]" />
-                <span className="font-medium text-gray-700">New Users</span>
+                <span className="font-medium text-gray-700">
+                  New Users
+                </span>
               </div>
+
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full border-2 border-[#335003]" />
-                <span className="font-medium text-gray-700">Total Users</span>
+                <span className="font-medium text-gray-700">
+                  Total Users
+                </span>
               </div>
             </div>
 
-            <ChartContainer config={chartConfig} className="h-64 w-full aspect-auto">
+            <ChartContainer
+              config={chartConfig}
+              className="h-64 w-full aspect-auto"
+            >
               <AreaChart
-                accessibilityLayer
-                data={chartData}
-                margin={{
-                  left: -15,
-                  right: 12,
-                  top: 10,
-                  bottom: 0,
-                }}
+                data={displayChartData}
+                margin={{ top: 12, right: 36, bottom: 8, left: 4 }}
               >
                 <defs>
-                  <linearGradient id="growthGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#649809" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#649809" stopOpacity={0.02} />
+                  <linearGradient
+                    id="growthGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="5%"
+                      stopColor="#649809"
+                      stopOpacity={0.4}
+                    />
+
+                    <stop
+                      offset="95%"
+                      stopColor="#649809"
+                      stopOpacity={0.02}
+                    />
                   </linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#e1ebb0" opacity={0.5} />
+
+                <CartesianGrid
+                  vertical={false}
+                  strokeDasharray="3 3"
+                  stroke="#e1ebb0"
+                  opacity={0.5}
+                />
+
                 <XAxis
                   dataKey="label"
+                  padding={{ left: 12, right: 28 }}
+                  minTickGap={32}
+                  interval="preserveStartEnd"
                   tickLine={false}
                   axisLine={false}
-                  tickMargin={8}
-                  className="text-[11px] fill-gray-500 font-medium"
                 />
+
                 <YAxis
                   tickLine={false}
                   axisLine={false}
@@ -370,84 +542,155 @@ export function UserGrowthChart() {
                   allowDecimals={false}
                   className="text-[11px] fill-gray-500"
                 />
+
                 <ChartTooltip
-                  cursor={{ stroke: "#649809", strokeWidth: 1, strokeDasharray: "4 4" }}
-                  content={({ active, payload: tooltipPayload, label }) => {
-                    if (active && tooltipPayload && tooltipPayload.length) {
-                      const newCount = tooltipPayload.find((p) => p.dataKey === "newUsers")?.value ?? 0;
-                      const totalCount = tooltipPayload.find((p) => p.dataKey === "totalUsers")?.value ?? 0;
+                  cursor={{
+                    stroke: "#649809",
+                    strokeWidth: 1,
+                    strokeDasharray: "4 4",
+                  }}
+                  content={({
+                    active,
+                    payload: tooltipPayload,
+                    label,
+                  }) => {
+                    if (
+                      active &&
+                      tooltipPayload &&
+                      tooltipPayload.length
+                    ) {
+                      const newCount =
+                        tooltipPayload.find(
+                          (item) => item.dataKey === "newUsers"
+                        )?.value ?? 0;
+
+                      const totalCount =
+                        tooltipPayload.find(
+                          (item) => item.dataKey === "totalUsers"
+                        )?.value ?? 0;
+
                       return (
                         <div className="bg-white border border-border rounded-lg p-2.5 shadow-md text-xs space-y-1">
                           <p className="font-bold text-gray-900 border-b border-gray-100 pb-1">
                             {label}
                           </p>
+
                           <div className="flex items-center justify-between gap-4">
                             <span className="text-gray-500 flex items-center gap-1.5">
                               <span className="h-2 w-2 rounded-full bg-[#649809]" />
                               New Users:
                             </span>
-                            <span className="font-bold text-[#649809]">{newCount}</span>
+
+                            <span className="font-bold text-[#649809]">
+                              {newCount}
+                            </span>
                           </div>
+
                           <div className="flex items-center justify-between gap-4">
                             <span className="text-gray-500 flex items-center gap-1.5">
                               <span className="h-2 w-2 rounded-full bg-[#335003]" />
                               Total Users:
                             </span>
-                            <span className="font-bold text-gray-900">{totalCount}</span>
+
+                            <span className="font-bold text-gray-900">
+                              {totalCount}
+                            </span>
                           </div>
                         </div>
                       );
                     }
+
                     return null;
                   }}
                 />
+
                 <Area
                   dataKey="newUsers"
-                  type="monotone"
+                  type="linear"
                   fill="url(#growthGradient)"
                   fillOpacity={1}
                   stroke="#649809"
                   strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#649809", stroke: "#ffffff", strokeWidth: 2 }}
-                  activeDot={{ r: 5, fill: "#649809", stroke: "#ffffff", strokeWidth: 2 }}
+                  dot={showDataDots ? {
+                    r: 4,
+                    fill: "#649809",
+                    stroke: "#ffffff",
+                    strokeWidth: 2,
+                  } : false}
+                  activeDot={{ r: 6, stroke: "#ffffff", strokeWidth: 2 }}
+                  connectNulls
                 />
+
                 <Line
-                  dataKey="totalUsers"
                   type="monotone"
-                  stroke="#335003"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 4"
-                  dot={false}
+                  dataKey="totalUsers"
+                  name="Total Users"
+                  stroke="#365314"
+                  strokeWidth={2}
+                  dot={{
+                    r: 5,
+                    fill: "#365314",
+                    stroke: "#FFFFFF",
+                    strokeWidth: 2,
+                  }}
+                  activeDot={{
+                    r: 7,
+                    fill: "#365314",
+                    stroke: "#FFFFFF",
+                    strokeWidth: 2,
+                  }}
                 />
               </AreaChart>
             </ChartContainer>
 
-            {/* Bottom summary bar */}
+            {filterType === "monthly" && (
+              <p className="mt-1 text-[11px] text-gray-500">
+                Current month is partial; future months are excluded from the chart.
+              </p>
+            )}
+
+            {/* Summary bar */}
             <div className="flex flex-wrap items-center justify-between pt-3 mt-3 border-t border-gray-100 text-xs">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                   <TrendingUp className="h-3.5 w-3.5 text-[#649809]" />
-                  <span className="text-gray-500">New Users:</span>
-                  <span className="font-bold text-gray-900">{totalNewUsers.toLocaleString()}</span>
+
+                  <span className="text-gray-500">
+                    New Users:
+                  </span>
+
+                  <span className="font-bold text-gray-900">
+                    {totalNewUsers.toLocaleString()}
+                  </span>
                 </div>
+
                 <div className="flex items-center gap-1.5">
                   <UserCheck className="h-3.5 w-3.5 text-[#335003]" />
-                  <span className="text-gray-500">Total at End:</span>
-                  <span className="font-bold text-gray-900">{totalUsersAtEnd.toLocaleString()}</span>
+
+                  <span className="text-gray-500">
+                    Total at End:
+                  </span>
+
+                  <span className="font-bold text-gray-900">
+                    {totalUsersAtEnd.toLocaleString()}
+                  </span>
                 </div>
               </div>
+
               <div className="flex items-center gap-3 text-gray-500 text-[11px]">
                 <span>
-                  Peak: <strong className="text-gray-900">{peakNewUsers}</strong>
+                  Peak:{" "}
+                  <strong className="text-gray-900">
+                    {peakNewUsers}
+                  </strong>
                 </span>
-                <span className="capitalize">
+
+                <span>
                   Period:{" "}
                   <strong className="text-[#649809]">
-                    {filterType === "monthly"
-                      ? `${year}`
-                      : filterType === "range"
+                    {filterType === "range"
                       ? `${appliedStartDate} ~ ${appliedEndDate}`
-                      : "All-Time"}
+                      : year}
                   </strong>
                 </span>
               </div>

@@ -2,30 +2,20 @@
 
 import * as React from "react";
 import {
-  LayoutPanelLeft,
   LayoutDashboard,
-  Mail,
-  CheckSquare,
-  MessageCircle,
-  Calendar,
-  Shield,
-  AlertTriangle,
-  Settings,
-  HelpCircle,
-  CreditCard,
-  LayoutTemplate,
   Users,
-  BarChart3,
-  Zap,
   Tag,
   Sparkles,
   Lightbulb,
+  HelpCircle,
   Megaphone,
+  MessageCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/store";
+import { useChatNotifications } from "@/context/chat-notification-context";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -39,78 +29,81 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-const data = {
-  user: {
-    name: "Next js",
-    email: "admin@example.com",
-    avatar: "",
-  },
-  navGroups: [
-    {
-      label: "Dashboards",
-      items: [
-        {
-          title: "Dashboard",
-          url: "/dashboard",
-          icon: LayoutDashboard,
-        },
-      ],
-    },
-    {
-      label: "Management",
-      items: [
-        {
-          title: "Users",
-          url: "/dashboard/users",
-          icon: Users,
-        },
-        {
-          title: "Categories",
-          url: "/dashboard/categories",
-          icon: Tag,
-        },
-        {
-          title: "Insights",
-          url: "/dashboard/insights",
-          icon: Sparkles,
-        },
-        {
-          title: "Tips",
-          url: "/dashboard/tips",
-          icon: Lightbulb,
-        },
-        {
-          title: "FAQs",
-          url: "/dashboard/faqs",
-          icon: HelpCircle,
-        },
-        {
-          title: "Broadcasts",
-          url: "/dashboard/broadcast",
-          icon: Megaphone,
-        },
-        {
-          title: "Chat Support" ,
-          url: "/dashboard/chat",
-          icon: MessageCircle,
-        },
-      ],
-    },
-    {
-      label: "Account",
-      items: [
-        {
-          title: "Profile",
-          url: "/dashboard/profile",
-          icon: Users,
-        },
-      ],
-    },
-  ],
-};
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = useSelector((state: RootState) => state.auth.user);
+  const { totalUnreadCount } = useChatNotifications();
+
+  const navGroups = React.useMemo(
+    () => [
+      {
+        label: "Dashboards",
+        items: [
+          {
+            title: "Dashboard",
+            url: "/dashboard",
+            icon: LayoutDashboard,
+          },
+        ],
+      },
+      {
+        label: "Management",
+        items: [
+          {
+            title: "Users",
+            url: "/dashboard/users",
+            icon: Users,
+          },
+          {
+            title: "Categories",
+            url: "/dashboard/categories",
+            icon: Tag,
+          },
+          {
+            title: "Insights",
+            url: "/dashboard/insights",
+            icon: Sparkles,
+          },
+          {
+            title: "Tips",
+            url: "/dashboard/tips",
+            icon: Lightbulb,
+          },
+          {
+            title: "FAQs",
+            url: "/dashboard/faqs",
+            icon: HelpCircle,
+          },
+          {
+            title: "Broadcasts",
+            url: "/dashboard/broadcast",
+            icon: Megaphone,
+          },
+          {
+            title: "Chat Support",
+            url: "/dashboard/chat",
+            icon: MessageCircle,
+            badge:
+              totalUnreadCount > 0 ? (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground animate-pulse">
+                  {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
+                </span>
+              ) : undefined,
+          },
+        ],
+      },
+      {
+        label: "Account",
+        items: [
+          {
+            title: "Profile",
+            url: "/dashboard/profile",
+            icon: Users,
+          },
+        ],
+      },
+    ],
+    [totalUnreadCount]
+  );
 
   const userData = user
     ? {
@@ -144,7 +137,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {data.navGroups.map((group) => (
+        {navGroups.map((group) => (
           <NavMain key={group.label} label={group.label} items={group.items} />
         ))}
       </SidebarContent>

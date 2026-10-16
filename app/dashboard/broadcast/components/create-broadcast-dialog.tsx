@@ -46,6 +46,7 @@ export function CreateBroadcastDialog({
   const [message, setMessage] = useState("");
   const [targetType, setTargetType] = useState<BroadcastTargetType>("all");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const isSubmittingRef = React.useRef(false);
 
   const queryClient = useQueryClient();
@@ -87,6 +88,9 @@ export function CreateBroadcastDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Submitting the form only validates and asks for explicit confirmation.
+    // It must never dispatch a broadcast directly (including via Enter).
     if (isSubmittingRef.current || mutation.isPending) return;
 
     if (!title.trim()) {
@@ -102,17 +106,26 @@ export function CreateBroadcastDialog({
       return;
     }
 
+    // Open the in-app confirmation dialog instead of using a browser alert.
+    setConfirmOpen(true);
+  };
+
+  const confirmBroadcast = () => {
+    if (isSubmittingRef.current || mutation.isPending) return;
+
     isSubmittingRef.current = true;
+    setConfirmOpen(false);
     mutation.mutate({
       title: title.trim(),
       message: message.trim(),
-      targetType: targetType,
+      targetType,
       targetUserIds: selectedUserIds,
       userIds: selectedUserIds,
     });
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ? (
@@ -127,7 +140,7 @@ export function CreateBroadcastDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-[560px] min-w-0 max-h-[90vh] overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-lg bg-[#649809]/10 border border-[#649809]/20 flex items-center justify-center text-[#649809]">
@@ -142,27 +155,25 @@ export function CreateBroadcastDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} className="w-full min-w-0 space-y-4 py-2">
           {/* Target Audience Selector */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Target Audience</Label>
-            <div className="grid grid-cols-2 gap-2">
+          <div className="w-full min-w-0 space-y-1.5">
+            <Label className="block max-w-full break-words text-xs font-semibold">Target Audience</Label>
+            <div className="grid w-full min-w-0 grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setTargetType("all")}
                 disabled={mutation.isPending}
-                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                  targetType === "all"
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center gap-2.5 ${targetType === "all"
                     ? "border-[#649809] bg-[#649809]/10 text-foreground shadow-sm"
                     : "border-border hover:bg-muted/50 text-muted-foreground"
-                }`}
+                  }`}
               >
                 <div
-                  className={`size-6 rounded-md flex items-center justify-center shrink-0 border ${
-                    targetType === "all"
+                  className={`size-6 rounded-md flex items-center justify-center shrink-0 border ${targetType === "all"
                       ? "bg-[#649809] text-white border-[#649809]"
                       : "bg-muted border-border text-muted-foreground"
-                  }`}
+                    }`}
                 >
                   <Users className="size-3" />
                 </div>
@@ -180,18 +191,16 @@ export function CreateBroadcastDialog({
                 type="button"
                 onClick={() => setTargetType("specific")}
                 disabled={mutation.isPending}
-                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                  targetType === "specific"
+                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center gap-2.5 ${targetType === "specific"
                     ? "border-[#649809] bg-[#649809]/10 text-foreground shadow-sm"
                     : "border-border hover:bg-muted/50 text-muted-foreground"
-                }`}
+                  }`}
               >
                 <div
-                  className={`size-6 rounded-md flex items-center justify-center shrink-0 border ${
-                    targetType === "specific"
+                  className={`size-6 rounded-md flex items-center justify-center shrink-0 border ${targetType === "specific"
                       ? "bg-[#649809] text-white border-[#649809]"
                       : "bg-muted border-border text-muted-foreground"
-                  }`}
+                    }`}
                 >
                   <UserCheck className="size-3" />
                 </div>
@@ -222,24 +231,30 @@ export function CreateBroadcastDialog({
           )}
 
           {/* Title */}
-          <div className="space-y-1.5">
-            <Label htmlFor="broadcast-title" className="text-xs font-semibold">
+          <div className="w-full min-w-0 space-y-1.5">
+            <Label htmlFor="broadcast-title" className="block max-w-full break-words text-xs font-semibold">
               Notification Title <span className="text-rose-500">*</span>
             </Label>
             <Input
               id="broadcast-title"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  // Do not allow Enter in the title field to submit a broadcast.
+                  e.preventDefault();
+                }
+              }}
               placeholder="e.g., Special Holiday Update"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               disabled={mutation.isPending}
               maxLength={100}
-              className="text-xs"
+              className="w-full min-w-0 text-xs"
             />
           </div>
 
           {/* Message Content */}
-          <div className="space-y-1.5">
-            <Label htmlFor="broadcast-message" className="text-xs font-semibold">
+          <div className="w-full min-w-0 space-y-1.5">
+            <Label htmlFor="broadcast-message" className="block max-w-full break-words text-xs font-semibold">
               Message Content <span className="text-rose-500">*</span>
             </Label>
             <Textarea
@@ -250,12 +265,12 @@ export function CreateBroadcastDialog({
               disabled={mutation.isPending}
               maxLength={1000}
               rows={4}
-                className="h-[130px] min-h-[130px] max-h-[130px] resize-none text-xs leading-relaxed whitespace-pre-wrap break-words overflow-y-auto"
+              className="block h-[130px] min-h-[130px] max-h-[130px] w-full min-w-0 max-w-full resize-none text-xs leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap break-words overflow-x-hidden overflow-y-auto"
 
             />
           </div>
 
-          <DialogFooter className="pt-3 gap-2">
+          <DialogFooter className="flex w-full min-w-0 flex-wrap gap-2 pt-3 sm:justify-end">
             <Button
               type="button"
               variant="outline"
@@ -288,5 +303,67 @@ export function CreateBroadcastDialog({
         </form>
       </DialogContent>
     </Dialog>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-[560px] min-w-0 max-h-[85vh] overflow-y-auto overflow-x-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="size-4 text-[#649809]" />
+              Confirm Broadcast
+            </DialogTitle>
+            <DialogDescription>
+              Review the notification details before sending.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="w-full min-w-0 space-y-3 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Notification Title</p>
+              <p className="max-w-full min-w-0 font-semibold text-foreground [overflow-wrap:anywhere] break-words">{title.trim()}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Message</p>
+              <p className="max-w-full min-w-0 whitespace-pre-wrap text-foreground [overflow-wrap:anywhere] break-words">{message.trim()}</p>
+            </div>
+           
+          </div>
+
+          {targetType === "all" && (
+            <p className="text-xs text-amber-700">
+              This notification will be sent to all eligible users.
+            </p>
+          )}
+
+          <DialogFooter className="flex w-full min-w-0 flex-wrap gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmBroadcast}
+              disabled={mutation.isPending}
+              className="bg-[#649809] text-white hover:bg-[#649809]/90"
+            >
+              {mutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-1.5 size-4" />
+                  Confirm & Send
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -66,6 +66,8 @@ const authSlice = createSlice({
       if (typeof window !== "undefined") {
         localStorage.removeItem("authToken");
         localStorage.removeItem("user");
+        localStorage.removeItem("fcmToken");
+        localStorage.removeItem("deviceuniqueid");
       }
     },
   },

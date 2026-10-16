@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { adminLogin } from "@/lib/api/auth.api";
+import { requestFcmToken, getStoredFcmToken } from "@/lib/firebase/messaging";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginFormData } from "@/lib/validations/login.schema";
@@ -25,6 +26,8 @@ const LoginForm = () => {
   const dispatch = useDispatch();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+
 
   const {
     register,
@@ -70,6 +73,11 @@ const LoginForm = () => {
         localStorage.setItem("user", JSON.stringify(userData));
       }
 
+      // Proactively ensure FCM token is stored/registered in background
+      if (typeof window !== "undefined" && !getStoredFcmToken()) {
+        requestFcmToken().catch(() => { });
+      }
+
       dispatch(login(userData));
       const returnUrl = searchParams ? searchParams.get("returnUrl") : null;
       router.push(returnUrl ? decodeURIComponent(returnUrl) : "/dashboard");
@@ -87,11 +95,27 @@ const LoginForm = () => {
     },
   });
 
-  const onSubmit = (data: LoginFormData) => {
+  const onSubmit = async (data: LoginFormData) => {
     if (isSubmittingRef.current || loginMutation.isPending) return;
     isSubmittingRef.current = true;
     setErrorMessage("");
-    loginMutation.mutate(data);
+
+    let fcmToken = getStoredFcmToken();
+    if (!fcmToken) {
+      try {
+        console.log("[Login] Requesting FCM token...");
+        fcmToken = await requestFcmToken();
+      } catch (err) {
+        console.warn("[Login] Could not retrieve FCM token:", err);
+      }
+    }
+
+    console.log(fcmToken, "fcmToken==");
+
+    loginMutation.mutate({
+      ...data,
+      fcmToken: fcmToken ?? "",
+    });
   };
 
   return (

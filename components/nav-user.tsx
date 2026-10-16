@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CreditCard,
   EllipsisVertical,
   LogOut,
   BellDot,
@@ -12,10 +11,9 @@ import { useDispatch } from 'react-redux';
 import { logout } from '@/lib/slices/authSlice';
 import { useRouter } from 'next/navigation';
 import { adminLogout, getAdminProfile } from '@/lib/api/auth.api';
+import { disconnectChatSocket } from '@/lib/chat/socket';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-
-import { Logo } from "@/components/logo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,10 +68,12 @@ export function NavUser({
 
   const handleLogout = async () => {
     try {
+      disconnectChatSocket();
       await adminLogout();
     } catch {
       // Ignored - cleanup handled in adminLogout
     } finally {
+      disconnectChatSocket();
       dispatch(logout());
       toast.success('Logged out successfully');
       router.push('/auth/login');

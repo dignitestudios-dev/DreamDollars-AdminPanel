@@ -141,7 +141,7 @@ export const createAdminInsight = async (
     }
   }
 
-  const response = await API.post<CreateInsightResponse>("/admin/insights", body);
+  const response = await API.post<CreateInsightResponse>("/admin/insights", body, { timeout: 0 });
   return response.data;
 };
 
