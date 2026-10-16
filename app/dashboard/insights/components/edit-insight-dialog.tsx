@@ -94,11 +94,6 @@ export function EditInsightDialog({
   const queryClient = useQueryClient();
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && (title !== (insight.title || "") || description !== (insight.description || "") || externalLink !== (insight.external_link || "") || thumbnailFile || videoFile) && !mutation.isPending) {
-      if (!window.confirm("You have unsaved insight changes. Are you sure you want to discard them?")) {
-        return;
-      }
-    }
     setOpen(newOpen);
   };
 

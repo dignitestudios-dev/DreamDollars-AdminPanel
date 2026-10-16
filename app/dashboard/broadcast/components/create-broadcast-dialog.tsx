@@ -52,11 +52,6 @@ export function CreateBroadcastDialog({
   const queryClient = useQueryClient();
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && (title.trim() || message.trim()) && !mutation.isPending) {
-      if (!window.confirm("You have unsaved broadcast changes. Are you sure you want to discard them?")) {
-        return;
-      }
-    }
     setOpen(newOpen);
   };
 

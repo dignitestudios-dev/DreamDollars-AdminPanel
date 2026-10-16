@@ -129,10 +129,6 @@ export default function ProfilePage() {
   };
 
   const handleCancelEdit = () => {
-    if (isDirty) {
-      const confirmDiscard = window.confirm("You have unsaved changes. Discard them?");
-      if (!confirmDiscard) return;
-    }
     setIsEditing(false);
     setSelectedFile(null);
     setPreviewUrl(null);

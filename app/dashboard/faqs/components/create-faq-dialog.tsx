@@ -57,10 +57,6 @@ export function CreateFaqDialog({ onSuccess, trigger }: CreateFaqDialogProps) {
   });
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && (question.trim() || answer.trim())) {
-      const confirmDiscard = window.confirm("You have unsaved changes. Discard them?");
-      if (!confirmDiscard) return;
-    }
     if (!nextOpen) {
       resetForm();
     }

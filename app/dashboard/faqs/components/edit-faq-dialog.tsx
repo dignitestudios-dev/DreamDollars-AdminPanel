@@ -71,10 +71,6 @@ export function EditFaqDialog({
   });
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && isDirty) {
-      const confirmDiscard = window.confirm("You have unsaved changes. Discard them?");
-      if (!confirmDiscard) return;
-    }
     onOpenChange(nextOpen);
   };
 

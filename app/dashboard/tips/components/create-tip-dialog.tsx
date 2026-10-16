@@ -59,11 +59,6 @@ export function CreateTipDialog({
   const queryClient = useQueryClient();
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && (title.trim() || description.trim()) && !mutation.isPending) {
-      if (!window.confirm("You have unsaved tip changes. Are you sure you want to discard them?")) {
-        return;
-      }
-    }
     setOpen(newOpen);
     if (!newOpen) resetForm();
   };

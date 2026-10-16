@@ -57,23 +57,6 @@ export function EditTipDialog({
   const queryClient = useQueryClient();
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (
-      !newOpen &&
-      tip &&
-      (title !== (tip.title || "") ||
-        description !== (tip.description || "") ||
-        dayOfWeek !== (tip.day_of_week?.toLowerCase() || "monday") ||
-        status !== (tip.status?.toLowerCase() || "active")) &&
-      !mutation.isPending
-    ) {
-      if (
-        !window.confirm(
-          "You have unsaved tip changes. Are you sure you want to discard them?"
-        )
-      ) {
-        return;
-      }
-    }
     onOpenChange(newOpen);
   };
 

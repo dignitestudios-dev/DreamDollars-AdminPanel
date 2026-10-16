@@ -53,11 +53,6 @@ export function UserFormDialog({ onAddUser }: UserFormDialogProps) {
   )
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && isDirty) {
-      if (!window.confirm("You have unsaved user changes. Are you sure you want to discard them?")) {
-        return
-      }
-    }
     setOpen(newOpen)
     if (!newOpen) {
       setUserData({

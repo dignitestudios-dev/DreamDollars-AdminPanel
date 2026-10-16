@@ -78,10 +78,6 @@ export function CreateCategoryDialog({ onSuccess }: CreateCategoryDialogProps) {
   });
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && name.trim()) {
-      const confirmDiscard = window.confirm("You have unsaved changes. Discard them?");
-      if (!confirmDiscard) return;
-    }
     if (!nextOpen) {
       resetForm();
     }
