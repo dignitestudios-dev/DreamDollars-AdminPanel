@@ -37,6 +37,7 @@ import {
   Loader2,
   MessageSquareOff,
   User,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -53,6 +54,8 @@ interface ChatWindowProps {
   isLoadingOlder?: boolean;
   onBackToSidebar?: () => void;
   isSocketConnected?: boolean;
+  messageLoadError?: string | null;
+  onRetryLoadMessages?: () => void;
 }
 
 export function ChatWindow({
@@ -68,6 +71,8 @@ export function ChatWindow({
   isLoadingOlder = false,
   onBackToSidebar,
   isSocketConnected = true,
+  messageLoadError,
+  onRetryLoadMessages,
 }: ChatWindowProps) {
   const [selectedAttachment, setSelectedAttachment] =
     useState<ChatAttachment | null>(null);
@@ -78,18 +83,26 @@ export function ChatWindow({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Group messages by date
+
   const groupedMessages = useMemo(() => {
-    const groups: { dateLabel: string; items: ChatMessage[] }[] = [];
-    messages.forEach((msg) => {
+    const groups = new Map<
+      string,
+      { dateLabel: string; items: ChatMessage[] }
+    >();
+
+    for (const msg of messages) {
       const label = formatMessageDateHeader(msg.created_at);
-      const existing = groups.find((g) => g.dateLabel === label);
-      if (existing) {
-        existing.items.push(msg);
-      } else {
-        groups.push({ dateLabel: label, items: [msg] });
+      let group = groups.get(label);
+
+      if (!group) {
+        group = { dateLabel: label, items: [] };
+        groups.set(label, group);
       }
-    });
-    return groups;
+
+      group.items.push(msg);
+    }
+
+    return Array.from(groups.values());
   }, [messages]);
 
   // Scroll to bottom when room changes or new message sent/received (if near bottom)
@@ -110,23 +123,23 @@ export function ChatWindow({
   };
 
   if (!room) {
-  return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center p-8 text-center bg-muted/10">
-      <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
-        <User className="w-8 h-8 opacity-80" />
+    return (
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center p-8 text-center bg-muted/10">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+          <User className="w-8 h-8 opacity-80" />
+        </div>
+
+        <h3 className="font-semibold text-lg mb-1">
+          No Conversation Selected
+        </h3>
+
+        <p className="text-sm text-muted-foreground max-w-sm">
+          Select a user conversation from the left sidebar to view their
+          message history and reply in real time.
+        </p>
       </div>
-
-      <h3 className="font-semibold text-lg mb-1">
-        No Conversation Selected
-      </h3>
-
-      <p className="text-sm text-muted-foreground max-w-sm">
-        Select a user conversation from the left sidebar to view their
-        message history and reply in real time.
-      </p>
-    </div>
-  );
-}
+    );
+  }
 
   return (
     <div className="flex h-full w-full flex-col bg-background">
@@ -249,44 +262,79 @@ export function ChatWindow({
         )}
 
         {/* Loading Initial State */}
-        {isLoadingMessages ? (
-          <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            <span className="text-xs">Loading chat history...</span>
-          </div>
-        ) : messages.length === 0 ? (
-          /* Empty Messages State */
-          <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground text-center">
-            <MessageSquareOff className="w-8 h-8 opacity-40 mb-1" />
-            <p className="text-sm font-medium">No messages in this chat</p>
-            <p className="text-xs max-w-xs text-muted-foreground">
-              Send a message below to initiate support with {room.user_name}.
-            </p>
-          </div>
-        ) : (
-          /* Grouped Messages Timeline */
-          groupedMessages.map((group) => (
-            <div key={group.dateLabel} className="space-y-1.5">
-              {/* Date Separator Pill */}
-              <div className="flex items-center justify-center my-2">
-                <span className="rounded-full bg-muted/80 border px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-2xs">
-                  {group.dateLabel}
-                </span>
-              </div>
 
-              {group.items.map((msg) => (
-                <ChatMessageBubble
-                  key={msg.id || msg.tempId}
-                  message={msg}
-                  userName={room.user_name}
-                  onDeleteMessage={(id) => setDeleteMessageId(id)}
-                  onPreviewAttachment={(att) => setSelectedAttachment(att)}
-                  onRetryMessage={onRetryMessage}
-                />
-              ))}
+        {isLoadingMessages ? (
+          <div
+            className="flex h-64 flex-col items-center justify-center gap-3 text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 className="w-7 h-7 animate-spin text-primary" />
+
+            <span className="text-sm font-medium">
+              Loading chat history...
+            </span>
+
+            <span className="text-xs">
+              Large conversations may take a little longer.
+            </span>
+          </div>
+        ) : messageLoadError ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
+            <MessageSquareOff className="w-8 h-8 text-muted-foreground" />
+
+            <p className="text-sm font-medium">
+              Unable to load conversation
+            </p>
+
+            <p className="text-xs text-muted-foreground max-w-sm">
+              {messageLoadError}
+            </p>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetryLoadMessages}
+              className="gap-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Retry
+            </Button>
+          </div>
+        )
+          : messages.length === 0 ? (
+            /* Empty Messages State */
+            <div className="flex h-64 flex-col items-center justify-center gap-2 text-muted-foreground text-center">
+              <MessageSquareOff className="w-8 h-8 opacity-40 mb-1" />
+              <p className="text-sm font-medium">No messages in this chat</p>
+              <p className="text-xs max-w-xs text-muted-foreground">
+                Send a message below to initiate support with {room.user_name}.
+              </p>
             </div>
-          ))
-        )}
+          ) : (
+            /* Grouped Messages Timeline */
+            groupedMessages.map((group) => (
+              <div key={group.dateLabel} className="space-y-1.5">
+                {/* Date Separator Pill */}
+                <div className="flex items-center justify-center my-2">
+                  <span className="rounded-full bg-muted/80 border px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-2xs">
+                    {group.dateLabel}
+                  </span>
+                </div>
+
+                {group.items.map((msg) => (
+                  <ChatMessageBubble
+                    key={msg.id || msg.tempId}
+                    message={msg}
+                    userName={room.user_name}
+                    onDeleteMessage={(id) => setDeleteMessageId(id)}
+                    onPreviewAttachment={(att) => setSelectedAttachment(att)}
+                    onRetryMessage={onRetryMessage}
+                  />
+                ))}
+              </div>
+            ))
+          )}
 
         <div ref={messagesEndRef} />
       </div>

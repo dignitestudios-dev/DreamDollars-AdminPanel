@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/lib/store";
 import { setServerError } from "@/lib/slices/uiSlice";
+import { getServerRetryHandler, clearServerRetryHandler } from "@/lib/error-retry";
 import {
   Dialog,
   DialogContent,
@@ -17,17 +18,32 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export function ServerErrorDialog() {
   const dispatch = useDispatch();
+  const [isRetrying, setIsRetrying] = useState(false);
   const hasServerError = useSelector(
     (state: RootState) => state.ui?.hasServerError ?? false
   );
 
   const closeDialog = () => {
     dispatch(setServerError(false));
+    clearServerRetryHandler();
   };
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
+    const retryHandler = getServerRetryHandler();
     dispatch(setServerError(false));
-    window.location.reload();
+    if (retryHandler) {
+      clearServerRetryHandler();
+      try {
+        setIsRetrying(true);
+        await retryHandler();
+      } catch (err) {
+        console.error("Retry handler failed:", err);
+      } finally {
+        setIsRetrying(false);
+      }
+    } else {
+      window.location.reload();
+    }
   };
 
   return (
@@ -45,12 +61,12 @@ export function ServerErrorDialog() {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="mt-4 gap-2">
-          <Button variant="ghost" onClick={closeDialog} className="cursor-pointer text-xs">
+          <Button variant="ghost" onClick={closeDialog} disabled={isRetrying} className="cursor-pointer text-xs">
             Close
           </Button>
-          <Button onClick={handleRetry} className="cursor-pointer text-xs bg-[#649809] hover:bg-[#527d07] text-white">
-            <RefreshCw className="size-3.5 mr-1.5" />
-            Try Again
+          <Button onClick={handleRetry} disabled={isRetrying} className="cursor-pointer text-xs bg-[#649809] hover:bg-[#527d07] text-white">
+            <RefreshCw className={`size-3.5 mr-1.5 ${isRetrying ? "animate-spin" : ""}`} />
+            {isRetrying ? "Retrying..." : "Try Again"}
           </Button>
         </DialogFooter>
       </DialogContent>

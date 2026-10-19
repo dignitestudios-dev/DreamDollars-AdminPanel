@@ -284,20 +284,7 @@ export function DataTable({
             )}
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isRefreshing || isLoading}
-            className="cursor-pointer border-border h-9 gap-1.5"
-            title="Refresh user list"
-          >
-            <RefreshCw
-              className={`size-3.5 ${isRefreshing ? "animate-spin text-[#649809]" : ""
-                }`}
-            />
-            <span className="hidden sm:inline">Refresh</span>
-          </Button>
+         
 
           <Button
             variant="outline"

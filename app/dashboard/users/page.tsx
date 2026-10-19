@@ -121,14 +121,37 @@ export default function UsersPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {pagination?.totalItems !== undefined && (
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#649809]/10 text-[#649809] border border-[#649809]/20">
-              <span>Total:</span>
-              <span>{pagination.totalItems.toLocaleString()} users</span>
-            </div>
-          )}
-        </div>
+       
+<div className="flex items-center gap-2">
+  {pagination?.totalItems !== undefined && (
+    <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#649809]/10 text-[#649809] border border-[#649809]/20">
+      <span>Total:</span>
+      <span>
+        {pagination.totalItems.toLocaleString()} users
+      </span>
+    </div>
+  )}
+
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    onClick={() => refetch()}
+    disabled={isFetching}
+    className="h-9 gap-1.5 cursor-pointer shrink-0"
+    title="Refresh user list"
+  >
+    <RefreshCw
+      className={`size-3.5 ${
+        isFetching ? "animate-spin text-[#649809]" : ""
+      }`}
+    />
+    <span>
+      {isFetching ? "Refreshing..." : "Refresh"}
+    </span>
+  </Button>
+</div>
+
       </div>
 
       {/* Top Stat Cards */}

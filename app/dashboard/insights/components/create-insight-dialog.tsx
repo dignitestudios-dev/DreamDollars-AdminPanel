@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAdminInsight } from "@/lib/api/insights.api";
 import { getAdminCategories } from "@/lib/api/categories.api";
+import { setServerRetryHandler, clearServerRetryHandler } from "@/lib/error-retry";
 import {
   Dialog,
   DialogContent,
@@ -71,8 +72,17 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
-    if (!newOpen) resetForm();
+    if (!newOpen) {
+      clearServerRetryHandler();
+      resetForm();
+    }
   };
+
+  useEffect(() => {
+    return () => {
+      clearServerRetryHandler();
+    };
+  }, []);
 
   // Fetch categories for dropdown
   const { data: categoriesResponse } = useQuery({
@@ -174,6 +184,7 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
     mutationFn: createAdminInsight,
     onSuccess: () => {
       isSubmittingRef.current = false;
+      clearServerRetryHandler();
       toast.success("Insight published successfully");
       queryClient.invalidateQueries({ queryKey: ["adminInsights"] });
       setOpen(false);
@@ -195,11 +206,11 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
     handleRemoveThumbnail();
     handleRemoveVideo();
     setExternalLink("");
+    mutation.reset();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmittingRef.current || mutation.isPending) return;
+  const executeSubmit = () => {
+    if (mutation.isPending) return;
 
     if (!title.trim()) {
       toast.error("Insight title is required");
@@ -245,6 +256,8 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
       }
     }
     isSubmittingRef.current = true;
+    setServerRetryHandler(() => executeSubmitRef.current());
+
     const formData = new FormData();
     formData.append("title", title.trim());
     formData.append("description", description.trim());
@@ -266,6 +279,17 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
     }
 
     mutation.mutate(formData);
+  };
+
+  const executeSubmitRef = useRef(executeSubmit);
+  useEffect(() => {
+    executeSubmitRef.current = executeSubmit;
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSubmittingRef.current || mutation.isPending) return;
+    executeSubmit();
   };
 
   return (
@@ -626,32 +650,51 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
           </div>
 
           {/* Dialog Footer */}
-          <DialogFooter className="pt-3 border-t border-border">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleOpenChange(false)}
-              disabled={mutation.isPending}
-              className="cursor-pointer h-8 text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={mutation.isPending || !title.trim() || !description.trim() || !categoryId}
-              className="bg-[#649809] hover:bg-[#527d07] text-white cursor-pointer h-8 text-xs font-medium shadow-xs"
-            >
-              {mutation.isPending ? (
-                <>
-                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-                  Publishing...
-                </>
-              ) : (
-                "Publish Insight"
-              )}
-            </Button>
+          <DialogFooter className="pt-3 border-t border-border flex items-center justify-between sm:justify-between">
+            {mutation.isError ? (
+              <div className="flex items-center gap-1.5 text-xs text-rose-600">
+                <span>Upload failed.</span>
+                <button
+                  type="button"
+                  onClick={() => executeSubmit()}
+                  disabled={mutation.isPending}
+                  className="font-semibold underline hover:text-rose-700 cursor-pointer"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleOpenChange(false)}
+                disabled={mutation.isPending}
+                className="cursor-pointer h-8 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={mutation.isPending || !title.trim() || !description.trim() || !categoryId}
+                className="bg-[#649809] hover:bg-[#527d07] text-white cursor-pointer h-8 text-xs font-medium shadow-xs"
+              >
+                {mutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    Publishing...
+                  </>
+                ) : mutation.isError ? (
+                  "Try Again"
+                ) : (
+                  "Publish Insight"
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

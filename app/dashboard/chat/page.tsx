@@ -38,6 +38,32 @@ const getPendingMessagesFromStorage = (roomId?: string): PendingMessage[] => {
   }
 };
 
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs = 20000
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          "Loading chat history timed out. Please try again."
+        )
+      );
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
 const savePendingMessageToStorage = (msg: PendingMessage) => {
   if (typeof window === "undefined") return;
   try {
@@ -87,6 +113,7 @@ function SupportChatContent() {
   // Messages state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [messageLoadError, setMessageLoadError] = useState<string | null>(null);
   const [messagesPage, setMessagesPage] = useState(1);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
@@ -197,10 +224,18 @@ function SupportChatContent() {
       const targetRoomId = String(roomId);
       activeLoadingRoomIdRef.current = targetRoomId;
       try {
-        if (page === 1) setIsLoadingMessages(true);
-        else setIsLoadingOlder(true);
+        if (page === 1) {
+          setIsLoadingMessages(true);
+          setMessageLoadError(null);
+        } else {
+          setIsLoadingOlder(true);
+        }
 
-        const res = await getChatMessages(targetRoomId, { page, limit: 30 });
+        // Add timeout to the API call to prevent hanging
+        const res = await withTimeout(
+          getChatMessages(targetRoomId, { page, limit: 30 }),
+          20000 // 20 second timeout
+        );
 
         // Discard stale responses if user switched rooms
         if (activeRoomIdRef.current !== targetRoomId) {
@@ -214,13 +249,13 @@ function SupportChatContent() {
           setSelectedRoom((prev) =>
             prev && String(prev.id || (prev as any)._id || "") === targetRoomId
               ? {
-                  ...prev,
-                  ...res.room,
-                  id: targetRoomId,
-                  admin_unread_count: 0,
-                  user_name: roomData.user_name || prev.user_name,
-                  user_email: roomData.user_email || prev.user_email,
-                }
+                ...prev,
+                ...res.room,
+                id: targetRoomId,
+                admin_unread_count: 0,
+                user_name: roomData.user_name || prev.user_name,
+                user_email: roomData.user_email || prev.user_email,
+              }
               : prev
           );
         }
@@ -288,12 +323,20 @@ function SupportChatContent() {
               : r
           )
         );
-      } catch (err: unknown) {
+      }
+      catch (err: unknown) {
         if (activeRoomIdRef.current !== targetRoomId) return;
+
         const errorMsg =
-          (err as { response?: { data?: { message?: string } } })?.response
-            ?.data?.message || "Failed to load messages";
-        toast.error(errorMsg);
+          err instanceof Error
+            ? err.message
+            : "Failed to load messages. Please try again.";
+
+        if (page === 1) {
+          setMessageLoadError(errorMsg);
+        } else {
+          toast.error(errorMsg);
+        }
       } finally {
         if (activeRoomIdRef.current === targetRoomId) {
           setIsLoadingMessages(false);
@@ -303,7 +346,13 @@ function SupportChatContent() {
     },
     [markRoomAsRead]
   );
+  const handleRetryLoadMessages = useCallback(() => {
+    const roomId = selectedRoomRef.current?.id;
 
+    if (!roomId) return;
+
+    loadRoomMessages(String(roomId), 1);
+  }, [loadRoomMessages]);
   // Handle switching rooms
   const handleSelectRoom = useCallback(
     (room: ChatRoom) => {
@@ -711,7 +760,7 @@ function SupportChatContent() {
         if (activeRoomIdRef.current) {
           const targetId = activeRoomIdRef.current;
           markRoomAsRead(targetId);
-          getChatMessages(targetId, { page: 1, limit: 1 }).catch(() => {});
+          getChatMessages(targetId, { page: 1, limit: 1 }).catch(() => { });
           setRooms((prev) =>
             prev.map((r) =>
               String(r.id || (r as any)._id || "") === targetId
@@ -875,9 +924,8 @@ function SupportChatContent() {
       <div className="h-[calc(100vh-11rem)] min-h-[520px] w-full rounded-xl border bg-card shadow-xs overflow-hidden flex flex-row">
         {/* Left Sidebar (Conversations List) */}
         <div
-          className={`w-full md:w-72 lg:w-80 shrink-0 h-full ${
-            mobileView === "chat" ? "hidden md:flex" : "flex"
-          }`}
+          className={`w-full md:w-72 lg:w-80 shrink-0 h-full ${mobileView === "chat" ? "hidden md:flex" : "flex"
+            }`}
         >
           <ChatSidebar
             rooms={rooms}
@@ -893,9 +941,8 @@ function SupportChatContent() {
 
         {/* Right Chat Area (Active Conversation) */}
         <div
-          className={`flex-1 h-full min-w-0 ${
-            mobileView === "sidebar" ? "hidden md:flex" : "flex"
-          }`}
+          className={`flex-1 h-full min-w-0 ${mobileView === "sidebar" ? "hidden md:flex" : "flex"
+            }`}
         >
           <ChatWindow
             room={selectedRoom}
@@ -910,6 +957,8 @@ function SupportChatContent() {
             isLoadingOlder={isLoadingOlder}
             onBackToSidebar={() => setMobileView("sidebar")}
             isSocketConnected={isSocketConnected}
+            messageLoadError={messageLoadError}
+            onRetryLoadMessages={handleRetryLoadMessages}
           />
         </div>
       </div>

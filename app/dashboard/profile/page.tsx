@@ -94,8 +94,8 @@ export default function ProfilePage() {
     onError: (error: any) => {
       toast.error(
         error?.response?.data?.message ||
-          error?.message ||
-          "Failed to update profile"
+        error?.message ||
+        "Failed to update profile"
       );
     },
     onSettled: () => {
@@ -105,24 +105,43 @@ export default function ProfilePage() {
 
   const onSubmit = (data: ProfileFormData) => {
     if (isSubmittingRef.current || updateMutation.isPending) return;
+
+    // Prevent API request when nothing has changed
+    if (!isDirty && !selectedFile) {
+      toast.info("No changes detected");
+      setIsEditing(false);
+      return;
+    }
+
     isSubmittingRef.current = true;
+
     updateMutation.mutate({
       name: data.name,
       profilePicture: selectedFile,
     });
   };
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    const allowedExtensions = /\.(jpe?g|png|webp)$/i;
+
+    if (
+      !allowedTypes.includes(file.type) ||
+      !allowedExtensions.test(file.name)
+    ) {
+      toast.error("Only JPG, JPEG, PNG, and WebP images are supported.");
+      e.target.value = "";
       return;
     }
+
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size must be less than 5MB");
+      toast.error("Image size must be less than 5MB.");
+      e.target.value = "";
       return;
     }
+
     setSelectedFile(file);
     setImageError(false);
     setPreviewUrl(URL.createObjectURL(file));
@@ -218,7 +237,12 @@ export default function ProfilePage() {
                 <Camera className="h-5 w-5 text-white" />
               </button>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+            <input ref={fileInputRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </div>
 
           {/* Name & role */}
@@ -250,7 +274,15 @@ export default function ProfilePage() {
                   <X className="h-4 w-4 mr-1.5" />
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" disabled={updateMutation.isPending} className="cursor-pointer">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={
+                    updateMutation.isPending ||
+                    (!isDirty && !selectedFile)
+                  }
+                  className="cursor-pointer"
+                >
                   {updateMutation.isPending ? (
                     <span className="flex items-center gap-1.5">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -303,10 +335,10 @@ export default function ProfilePage() {
             </div>
 
             {/* Role */}
-            <div>
-              <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</Label>
-              <p className="mt-1 text-gray-900 font-medium capitalize break-words">{profile?.role || "—"}</p>
-            </div>
+
+            {/* Role */}
+
+
           </div>
         </div>
 
@@ -323,16 +355,37 @@ export default function ProfilePage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               {/* Email */}
+
+              {/* Email */}
               <div className="min-w-0">
                 <Label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Mail className="h-3 w-3 shrink-0" /> Email Address
+                  <Mail className="h-3 w-3 shrink-0" />
+                  Email Address
                 </Label>
-                <p className="mt-1 text-gray-900 font-medium break-all">{profile?.email || "—"}</p>
-                {isEditing && <p className="text-xs text-gray-400 mt-0.5">Cannot be changed</p>}
+
+                <div
+                  className={`mt-1.5 rounded-md border   ${isEditing
+                    ? "bg-gray-100 border-gray-200 text-gray-500 px-3 py-2 cursor-not-allowed"
+                    : "border-transparent bg-transparent text-gray-900"
+                    }`}
+                  aria-readonly="true"
+                  title="Email address cannot be changed"
+                >
+                  <p className="font-medium break-all">
+                    {profile?.email || "—"}
+                  </p>
+                </div>
+
+                {isEditing && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    This field cannot be edited
+                  </p>
+                )}
               </div>
 
+
               {/* Phone */}
-              
+
             </div>
           </div>
 
