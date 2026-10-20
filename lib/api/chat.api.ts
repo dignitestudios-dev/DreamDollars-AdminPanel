@@ -23,6 +23,8 @@ export interface ChatMessage {
   hasError?: boolean;
 }
 
+export type ChatUserStatus = "deleted" | "active" | "inactive";
+
 export interface ChatRoom {
   id: string;
   user_id: string;
@@ -30,6 +32,7 @@ export interface ChatRoom {
   user_email: string;
   user_avatar: string | null;
   user_avatar_emoji: string | null;
+  user_status?: ChatUserStatus | string;
   last_message_text: string | null;
   last_message_sender_type: "user" | "admin" | null;
   last_message_sent_at: string | null;
@@ -64,6 +67,9 @@ export interface GetMessagesResult {
     id?: string;
     user_id?: string;
     admin_unread_count?: number;
+    user_name?: string;
+    user_email?: string;
+    user_status?: ChatUserStatus | string;
   };
   messages: ChatMessage[];
   pagination?: ChatPagination;
@@ -113,6 +119,21 @@ export const getAdminChatRooms = async (
     roomsList = raw.rooms;
     paginationData = raw.pagination;
   }
+
+  // Ensure user_status is properly extracted and normalized on each room
+  roomsList = roomsList.map((room: any) => ({
+    ...room,
+    user_status: (
+      room.user_status ||
+      room.userStatus ||
+      room.user?.status ||
+      room.user?.user_status ||
+      room.status ||
+      "active"
+    )
+      .toString()
+      .toLowerCase(),
+  }));
 
   return {
     success: true,

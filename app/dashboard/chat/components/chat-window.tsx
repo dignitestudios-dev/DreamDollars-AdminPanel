@@ -11,6 +11,7 @@ import { ChatMessageBubble } from "./chat-message-bubble";
 import { ChatInputBar } from "./chat-input-bar";
 import { MediaLightboxDialog } from "./media-lightbox-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -38,6 +39,8 @@ import {
   MessageSquareOff,
   User,
   RotateCcw,
+  UserX,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -141,6 +144,21 @@ export function ChatWindow({
     );
   }
 
+  const userStatus = (
+    room.user_status ||
+    (room as any).userStatus ||
+    (room as any).status ||
+    "active"
+  )
+    .toString()
+    .toLowerCase()
+    .trim();
+
+  const isDeleted = userStatus === "deleted";
+  const isInactive = userStatus === "inactive";
+  const canSendMessage = !isDeleted && !isInactive;
+  const canViewProfile = !isDeleted && Boolean(room.user_id);
+
   return (
     <div className="flex h-full w-full flex-col bg-background">
       {/* Chat Room Header */}
@@ -166,7 +184,7 @@ export function ChatWindow({
                 {room.user_avatar_emoji || getInitials(room.user_name)}
               </AvatarFallback>
             </Avatar>
-            {isSocketConnected && (
+            {isSocketConnected && !isDeleted && (
               <span
                 className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 border-2 border-background"
                 title="Real-time connected"
@@ -179,6 +197,22 @@ export function ChatWindow({
               <h3 className="text-xs sm:text-sm font-semibold leading-none">
                 {room.user_name || "Unknown User"}
               </h3>
+              {isDeleted && (
+                <Badge
+                  variant="destructive"
+                  className="text-[10px] px-1.5 py-0 h-4 uppercase font-semibold leading-none"
+                >
+                  Deleted
+                </Badge>
+              )}
+              {isInactive && (
+                <Badge
+                  variant="outline"
+                  className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] px-1.5 py-0 h-4 uppercase font-semibold leading-none"
+                >
+                  Inactive
+                </Badge>
+              )}
             </div>
             <span className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
               {room.user_email}
@@ -188,7 +222,7 @@ export function ChatWindow({
 
         {/* Header Actions */}
         <div className="flex items-center gap-1">
-          {room.user_id && (
+          {canViewProfile && (
             <Button
               variant="outline"
               size="sm"
@@ -213,15 +247,17 @@ export function ChatWindow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              {room.user_id && (
-                <DropdownMenuItem asChild className="sm:hidden text-xs">
-                  <Link href={`/dashboard/users/${room.user_id}`}>
-                    <ExternalLink className="w-3.5 h-3.5 mr-2" />
-                    View User Profile
-                  </Link>
-                </DropdownMenuItem>
+              {canViewProfile && (
+                <>
+                  <DropdownMenuItem asChild className="sm:hidden text-xs">
+                    <Link href={`/dashboard/users/${room.user_id}`}>
+                      <ExternalLink className="w-3.5 h-3.5 mr-2" />
+                      View User Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="sm:hidden" />
+                </>
               )}
-              <DropdownMenuSeparator className="sm:hidden" />
               <DropdownMenuItem
                 onClick={() => setClearDialogOpen(true)}
                 className="text-xs text-destructive focus:text-destructive cursor-pointer"
@@ -339,8 +375,20 @@ export function ChatWindow({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Bar */}
-      <ChatInputBar onSendMessage={onSendMessage} disabled={isLoadingMessages} />
+      {/* Input Bar or Status Notice */}
+      {canSendMessage ? (
+        <ChatInputBar onSendMessage={onSendMessage} disabled={isLoadingMessages} />
+      ) : isDeleted ? (
+        <div className="border-t bg-muted/30 px-4 py-3 flex items-center justify-center gap-2 text-xs text-muted-foreground select-none">
+          <UserX className="w-4 h-4 text-destructive shrink-0" />
+          <span>This account has been deleted. Messaging is disabled.</span>
+        </div>
+      ) : isInactive ? (
+        <div className="border-t bg-muted/30 px-4 py-3 flex items-center justify-center gap-2 text-xs text-muted-foreground select-none">
+          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+          <span>This account is inactive. Messaging is disabled.</span>
+        </div>
+      ) : null}
 
       {/* Media Lightbox */}
       <MediaLightboxDialog

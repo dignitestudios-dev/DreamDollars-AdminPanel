@@ -245,7 +245,11 @@ function SupportChatContent() {
         const fetchedMessages = res.messages || [];
 
         if (res.room) {
-          const roomData = res.room as { user_name?: string; user_email?: string };
+          const roomData = res.room as {
+            user_name?: string;
+            user_email?: string;
+            user_status?: string;
+          };
           setSelectedRoom((prev) =>
             prev && String(prev.id || (prev as any)._id || "") === targetRoomId
               ? {
@@ -255,6 +259,13 @@ function SupportChatContent() {
                 admin_unread_count: 0,
                 user_name: roomData.user_name || prev.user_name,
                 user_email: roomData.user_email || prev.user_email,
+                user_status: (
+                  roomData.user_status ||
+                  prev.user_status ||
+                  "active"
+                )
+                  .toString()
+                  .toLowerCase(),
               }
               : prev
           );
@@ -371,6 +382,13 @@ function SupportChatContent() {
       const normalizedRoom: ChatRoom = {
         ...room,
         id: targetRoomId,
+        user_status: (
+          room.user_status ||
+          (room as any).userStatus ||
+          "active"
+        )
+          .toString()
+          .toLowerCase(),
       };
 
       // 1. Mark selection in refs so stale/lagging URL params from transitions cannot revert it
@@ -454,6 +472,7 @@ function SupportChatContent() {
         user_email: "",
         user_avatar: null,
         user_avatar_emoji: null,
+        user_status: "active",
         last_message_text: null,
         last_message_sender_type: null,
         last_message_sent_at: null,
@@ -789,6 +808,19 @@ function SupportChatContent() {
   // Send Message with Optimistic UI Update (text-only)
   const handleSendMessage = async (text: string) => {
     if (!selectedRoom?.id) return;
+
+    const userStatus = (
+      selectedRoom.user_status ||
+      (selectedRoom as any).userStatus ||
+      "active"
+    )
+      .toString()
+      .toLowerCase();
+
+    if (userStatus === "deleted" || userStatus === "inactive") {
+      toast.error(`Cannot send message. User account is ${userStatus}.`);
+      return;
+    }
 
     const roomId = selectedRoom.id;
     const tempId = `temp-${Date.now()}`;

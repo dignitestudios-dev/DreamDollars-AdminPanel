@@ -147,6 +147,17 @@ export function ChatSidebar({
             const isSelected = Boolean(selectedRoomId && roomId && selectedRoomId === roomId);
             const hasUnread = room.admin_unread_count > 0;
             const isLastSentByAdmin = room.last_message_sender_type === "admin";
+            const roomStatus = (
+              room.user_status ||
+              (room as any).userStatus ||
+              (room as any).status ||
+              "active"
+            )
+              .toString()
+              .toLowerCase()
+              .trim();
+            const isRoomDeleted = roomStatus === "deleted";
+            const isRoomInactive = roomStatus === "inactive";
 
             return (
               <button
@@ -162,7 +173,7 @@ export function ChatSidebar({
               >
                 {/* User Avatar */}
                 <div className="relative shrink-0">
-                  <Avatar className="h-8.5 w-8.5 sm:h-9 sm:w-9 border border-border">
+                  <Avatar className={cn("h-8.5 w-8.5 sm:h-9 sm:w-9 border border-border", isRoomDeleted && "opacity-75")}>
                     {room.user_avatar ? (
                       <AvatarImage
                         src={room.user_avatar}
@@ -184,14 +195,26 @@ export function ChatSidebar({
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span
-                      className={cn(
-                        "text-[12px] truncate",
-                        hasUnread ? "font-bold text-foreground" : "font-medium text-foreground"
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span
+                        className={cn(
+                          "text-[12px] truncate",
+                          hasUnread ? "font-bold text-foreground" : "font-medium text-foreground"
+                        )}
+                      >
+                        {room.user_name || "Unknown User"}
+                      </span>
+                      {isRoomDeleted && (
+                        <span className="shrink-0 text-[8.5px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 rounded px-1 leading-tight">
+                          Deleted
+                        </span>
                       )}
-                    >
-                      {room.user_name || "Unknown User"}
-                    </span>
+                      {isRoomInactive && (
+                        <span className="shrink-0 text-[8.5px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1 leading-tight">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[9.5px] text-muted-foreground whitespace-nowrap shrink-0">
                       {formatConversationTime(room.last_message_sent_at)}
                     </span>
