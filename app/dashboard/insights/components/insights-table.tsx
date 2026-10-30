@@ -150,7 +150,7 @@ export function InsightsTable({
             <AlertDialogTitle className="text-base font-bold text-gray-900 dark:text-gray-100">
               Delete Financial Insight
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-muted-foreground break-all">
+                 <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
               Are you sure you want to delete{" "}
               <strong className="text-foreground">
                 &ldquo;{deletingInsight?.title}&rdquo;

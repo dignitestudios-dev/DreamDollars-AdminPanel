@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createAdminFaq } from "@/lib/api/faqs.api";
+import { createAdminFaq, FaqStatus } from "@/lib/api/faqs.api";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Loader2, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +35,7 @@ export function CreateFaqDialog({ onSuccess, trigger }: CreateFaqDialogProps) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [status, setStatus] = useState<FaqStatus>("active");
   const isSubmittingRef = useRef(false);
 
   const queryClient = useQueryClient();
@@ -35,6 +43,7 @@ export function CreateFaqDialog({ onSuccess, trigger }: CreateFaqDialogProps) {
   const resetForm = () => {
     setQuestion("");
     setAnswer("");
+    setStatus("active");
   };
 
   const mutation = useMutation({
@@ -83,6 +92,7 @@ export function CreateFaqDialog({ onSuccess, trigger }: CreateFaqDialogProps) {
     mutation.mutate({
       question: trimmedQuestion,
       answer: trimmedAnswer,
+      status,
     });
   };
 
@@ -138,16 +148,46 @@ export function CreateFaqDialog({ onSuccess, trigger }: CreateFaqDialogProps) {
             <Label htmlFor="faq-answer" className="text-xs font-semibold">
               Answer <span className="text-rose-500">*</span>
             </Label>
-          <Textarea
-  id="faq-answer"
-  placeholder="e.g., Assets + savings buckets + goal balances + portfolio value – total debt. It recalculates the moment any of those changes."
-  value={answer}
-  maxLength={2000}
-  disabled={mutation.isPending}
-  onChange={(e) => setAnswer(e.target.value)}
-  rows={5}
-  className="h-[130px] min-h-[130px] max-h-[130px] resize-none text-xs leading-relaxed whitespace-pre-wrap break-words overflow-y-auto"
-/>
+            <Textarea
+              id="faq-answer"
+              placeholder="e.g., Assets + savings buckets + goal balances + portfolio value – total debt. It recalculates the moment any of those changes."
+              value={answer}
+              maxLength={2000}
+              disabled={mutation.isPending}
+              onChange={(e) => setAnswer(e.target.value)}
+              rows={5}
+              className="h-[130px] min-h-[130px] max-h-[130px] resize-none text-xs leading-relaxed whitespace-pre-wrap break-words overflow-y-auto"
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1.5">
+            <Label htmlFor="faq-status" className="text-xs font-semibold">
+              Status <span className="text-rose-500">*</span>
+            </Label>
+            <Select
+              value={status}
+              onValueChange={(val) => setStatus(val as FaqStatus)}
+              disabled={mutation.isPending}
+            >
+              <SelectTrigger id="faq-status" className="h-9 w-full text-xs">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active" className="text-xs">
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    Active (Visible to users)
+                  </span>
+                </SelectItem>
+                <SelectItem value="inactive" className="text-xs">
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0" />
+                    Inactive (Hidden from users)
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <DialogFooter className="pt-3 gap-2">

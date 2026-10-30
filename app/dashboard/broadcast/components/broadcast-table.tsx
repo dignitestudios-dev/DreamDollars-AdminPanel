@@ -29,8 +29,17 @@ import {
   RefreshCw,
   Search,
   X,
+  Calendar,
 } from "lucide-react";
+import { Eye } from "lucide-react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useSearch } from "@/hooks/use-search";
 
@@ -75,7 +84,8 @@ export function BroadcastTable({
 
   const totalPages = pagination?.totalPages || 1;
   const totalItems = pagination?.totalItems ?? broadcasts.length;
-
+  const [selectedBroadcast, setSelectedBroadcast] =
+    React.useState<BroadcastRecord | null>(null);
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "-";
     try {
@@ -159,6 +169,9 @@ export function BroadcastTable({
               <TableHead className="w-[18%] text-xs font-semibold">Target Audience</TableHead>
               <TableHead className="w-[14%] text-xs font-semibold">Recipients</TableHead>
               <TableHead className="w-[18%] text-xs font-semibold">Sent At</TableHead>
+              <TableHead className="w-[70px] text-xs font-semibold text-right">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -212,32 +225,31 @@ export function BroadcastTable({
                   >
                     {/* Title & Message */}
                     <TableCell className="py-3.5 max-w-[420px]">
-                    <div className="min-w-0 max-w-full">
-  <p
-    title={item.title || ""}
-    className="font-semibold text-sm text-foreground line-clamp-2 break-words whitespace-normal overflow-hidden"
-  >
-    {item.title || "—"}
-  </p>
+                      <div className="min-w-0 max-w-full">
+                        <p
+                          title={item.title || ""}
+                          className="font-semibold text-sm text-foreground line-clamp-2 break-words whitespace-normal overflow-hidden"
+                        >
+                          {item.title || "—"}
+                        </p>
 
-  <p
-    title={item.message || ""}
-    className="text-xs text-muted-foreground line-clamp-2 break-words whitespace-normal overflow-hidden"
-  >
-    {item.message || "—"}
-  </p>
-</div>
+                        <p
+                          title={item.message || ""}
+                          className="text-xs text-muted-foreground line-clamp-2 break-words whitespace-normal overflow-hidden"
+                        >
+                          {item.message || "—"}
+                        </p>
+                      </div>
                     </TableCell>
 
                     {/* Target Audience */}
                     <TableCell className="py-3.5">
                       <Badge
                         variant="outline"
-                        className={`text-xs capitalize font-semibold border ${
-                          isAll
-                            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                            : "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
-                        }`}
+                        className={`text-xs capitalize font-semibold border ${isAll
+                          ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                          : "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                          }`}
                       >
                         {isAll ? (
                           <>
@@ -269,6 +281,19 @@ export function BroadcastTable({
                         )}
                       </span>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setSelectedBroadcast(item)}
+                        title="View broadcast details"
+                        className="h-8 w-8 cursor-pointer text-muted-foreground hover:text-[#649809]"
+                      >
+                        <Eye className="size-4" />
+                        <span className="sr-only">View broadcast details</span>
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })
@@ -276,6 +301,117 @@ export function BroadcastTable({
           </TableBody>
         </Table>
       </div>
+
+
+
+      <Dialog
+        open={!!selectedBroadcast}
+        onOpenChange={(open) => {
+          if (!open) setSelectedBroadcast(null);
+        }}
+      >
+        <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden rounded-xl p-5 sm:p-7">
+
+          <DialogHeader className="space-y-1.5 pb-3">
+            <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              Broadcast Details
+            </DialogTitle>
+
+           
+          </DialogHeader>
+
+          {selectedBroadcast && (
+            <div className="space-y-5">
+
+              {/* Title */}
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Title
+                </p>
+
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-muted/40 p-3.5 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-all [overflow-wrap:anywhere]">
+                    {selectedBroadcast.title || "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Full Message */}
+              <div className="space-y-2 min-w-0">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Full Message
+                </p>
+
+                <div className="rounded-xl border border-border bg-slate-50 dark:bg-muted/40 p-3.5 min-w-0">
+                  <div className="max-h-40 overflow-y-auto overflow-x-hidden pr-2">
+                    <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-all [overflow-wrap:anywhere]">
+                      {selectedBroadcast.message || "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Target Audience */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Target Audience
+                </p>
+
+                <Badge
+                  variant="outline"
+                  className="w-fit gap-1.5 rounded-lg border-[#649809]/25 bg-[#649809]/10 px-3 py-1.5 text-xs font-semibold text-[#649809]"
+                >
+                  <Users className="size-3.5" />
+
+                  {(selectedBroadcast.targetType || "").toLowerCase() === "all"
+                    ? "All Users"
+                    : "Specific Users"}
+                </Badge>
+              </div>
+
+              {/* Recipients */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Recipients
+                </p>
+
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-slate-50 dark:bg-muted/40 p-3.5">
+                  <Users className="size-5 shrink-0 text-blue-600" />
+
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {selectedBroadcast.totalRecipients ??
+                      selectedBroadcast.total_recipients ??
+                      ((selectedBroadcast.targetType || "").toLowerCase() === "all"
+                        ? "All"
+                        : 1)}{" "}
+                    Users
+                  </p>
+                </div>
+              </div>
+
+              {/* Sent Date */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Sent At
+                </p>
+
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-slate-50 dark:bg-muted/40 p-3.5">
+                  <Calendar className="size-5 shrink-0 text-blue-600" />
+
+                  <p className="text-sm text-gray-900 dark:text-gray-100">
+                    {formatDate(
+                      selectedBroadcast.createdAt ||
+                      selectedBroadcast.created_at ||
+                      selectedBroadcast.updatedAt
+                    )}
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Pagination Controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground px-1">

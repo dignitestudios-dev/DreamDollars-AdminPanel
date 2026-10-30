@@ -18,11 +18,13 @@ export default function FaqsPage() {
     page: 1,
     limit: 10,
     search: "",
+    status: "all",
   });
 
   const page = values.page;
   const limit = values.limit;
   const search = values.search;
+  const status = values.status || "all";
 
   useEffect(() => {
     document.title = "FAQs | Dream Dollar Admin";
@@ -31,6 +33,13 @@ export default function FaqsPage() {
   const handleSearchChange = React.useCallback(
     (val: string) => {
       setParams({ search: val, page: 1 });
+    },
+    [setParams]
+  );
+
+  const handleStatusChange = React.useCallback(
+    (val: string) => {
+      setParams({ status: val, page: 1 });
     },
     [setParams]
   );
@@ -44,19 +53,31 @@ export default function FaqsPage() {
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ["adminFaqs", { page, limit, search }],
+    queryKey: ["adminFaqs", { page, limit, search, status }],
     queryFn: () =>
       getAdminFaqs({
         page,
         limit,
         search,
+        status: status !== "all" ? status : undefined,
       }),
     placeholderData: (previousData) => previousData,
   });
 
-  const faqs = response?.data ?? [];
+  const rawFaqs = response?.data ?? [];
   const pagination = response?.pagination;
-  const totalItems = pagination?.totalItems ?? faqs.length;
+
+  // Filter client-side if status is active or inactive to guarantee consistency
+  const faqs = React.useMemo(() => {
+    if (status === "all") return rawFaqs;
+    return rawFaqs.filter((f) => {
+      const itemStatus = f.status?.toLowerCase() === "inactive" ? "inactive" : "active";
+      return itemStatus === status;
+    });
+  }, [rawFaqs, status]);
+
+  const totalItems =
+    status === "all" ? (pagination?.totalItems ?? rawFaqs.length) : faqs.length;
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
@@ -112,10 +133,20 @@ export default function FaqsPage() {
       {/* FAQs Table */}
       <FaqsTable
         faqs={faqs}
-        pagination={pagination}
+        pagination={
+          status !== "all" && pagination
+            ? {
+                ...pagination,
+                totalItems: faqs.length,
+                totalPages: Math.max(1, Math.ceil(faqs.length / limit)),
+              }
+            : pagination
+        }
         isLoading={isLoading}
         search={search}
         onSearchChange={handleSearchChange}
+        status={status}
+        onStatusChange={handleStatusChange}
         page={page}
         onPageChange={(p) => setParams({ page: p })}
         limit={limit}

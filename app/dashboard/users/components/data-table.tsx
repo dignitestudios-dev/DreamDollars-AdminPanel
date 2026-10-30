@@ -51,6 +51,7 @@ import { AdminUser, UsersPagination, updateUserStatus } from "@/lib/api/users.ap
 import { toast } from "sonner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useSearch } from "@/hooks/use-search";
+import { ConfirmationDialog } from "./confirmation-dialog";
 
 interface DataTableProps {
   users: AdminUser[];
@@ -100,7 +101,7 @@ export function DataTable({
   isRefreshing = false,
 }: DataTableProps) {
   const router = useRouter();
-
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   // Unified search hook with debounce and safe clearing
   const {
     query: searchInput,
@@ -164,28 +165,38 @@ export function DataTable({
     );
   };
 
-  const handleToggleUserStatus = async (user: AdminUser) => {
-    const isCurrentlyActive = user.accountStatus === "active";
-    const nextStatus = isCurrentlyActive ? "inactive" : "active";
-    const statusLabel = nextStatus === "active" ? "Active" : "Inactive";
+  const handleToggleUserStatus = async () => {
+    if (!selectedUser) return;
+
+    const nextStatus =
+      selectedUser.accountStatus === "active"
+        ? "inactive"
+        : "active";
+
+    const statusLabel =
+      nextStatus === "active" ? "Active" : "Inactive";
 
     try {
-      setUpdatingUserId(user.id);
-      await updateUserStatus(user.id, nextStatus);
-      toast.success(
-        `User status changed to ${statusLabel}`
-      );
+      setUpdatingUserId(selectedUser.id);
+
+      await updateUserStatus(selectedUser.id, nextStatus);
+
+      toast.success(`User status changed to ${statusLabel}`);
+
+      setSelectedUser(null);
       onRefresh();
     } catch (err: unknown) {
       const errorMsg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err as {
+          response?: { data?: { message?: string } };
+        })?.response?.data?.message ||
         "Failed to update user status";
+
       toast.error(errorMsg);
     } finally {
       setUpdatingUserId(null);
     }
   };
-
   const hasActiveFilters =
     Boolean(search) ||
     status !== "all" ||
@@ -284,7 +295,7 @@ export function DataTable({
             )}
           </Button>
 
-         
+
 
           <Button
             variant="outline"
@@ -659,7 +670,7 @@ export function DataTable({
                               {user.accountStatus === "active" ? (
                                 <DropdownMenuItem
                                   className="cursor-pointer text-xs text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/30"
-                                  onClick={() => handleToggleUserStatus(user)}
+                                  onClick={() => setSelectedUser(user)}
                                 >
                                   <UserX className="mr-2 size-3.5 text-rose-600" />
                                   Mark as Inactive
@@ -667,7 +678,7 @@ export function DataTable({
                               ) : (
                                 <DropdownMenuItem
                                   className="cursor-pointer text-xs text-emerald-600 focus:text-emerald-600 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
-                                  onClick={() => handleToggleUserStatus(user)}
+                                  onClick={() => setSelectedUser(user)}
                                 >
                                   <UserCheck className="mr-2 size-3.5 text-emerald-600" />
                                   Mark as Active
@@ -767,6 +778,36 @@ export function DataTable({
           </div>
         </div>
       </div>
+      <ConfirmationDialog
+        open={!!selectedUser}
+        onOpenChange={(open) => {
+          if (!open && !updatingUserId) {
+            setSelectedUser(null);
+          }
+        }}
+        title={
+          selectedUser?.accountStatus === "active"
+            ? "Deactivate User?"
+            : "Activate User?"
+        }
+        description={
+          selectedUser?.accountStatus === "active"
+            ? `Are you sure you want to deactivate ${selectedUser.name || selectedUser.email}? This user will no longer have an active account.`
+            : `Are you sure you want to activate ${selectedUser?.name || selectedUser?.email}? This will restore the user's active account status.`
+        }
+        confirmText={
+          selectedUser?.accountStatus === "active"
+            ? "Yes, Deactivate"
+            : "Yes, Activate"
+        }
+        variant={
+          selectedUser?.accountStatus === "active"
+            ? "destructive"
+            : "default"
+        }
+        isLoading={!!updatingUserId}
+        onConfirm={handleToggleUserStatus}
+      />
     </div>
   );
 }

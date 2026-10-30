@@ -46,7 +46,7 @@ type ContentMode = "media" | "link";
 
 export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
   const MAX_THUMBNAIL_SIZE = 10.5 * 1024 * 1024; // 10 MB
-  const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100 MB
+  const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 100 MB
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -102,36 +102,91 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
     const allowedExts = /\.(jpe?g|png|webp)$/i;
     return allowedTypes.includes(file.type.toLowerCase()) || allowedExts.test(file.name);
   };
+  const isValidImageContent = async (file: File): Promise<boolean> => {
+    try {
+      const buffer = await file.slice(0, 12).arrayBuffer();
+      const bytes = new Uint8Array(buffer);
 
+      const isJpeg =
+        bytes[0] === 0xff &&
+        bytes[1] === 0xd8 &&
+        bytes[2] === 0xff;
+
+      const isPng =
+        bytes[0] === 0x89 &&
+        bytes[1] === 0x50 &&
+        bytes[2] === 0x4e &&
+        bytes[3] === 0x47 &&
+        bytes[4] === 0x0d &&
+        bytes[5] === 0x0a &&
+        bytes[6] === 0x1a &&
+        bytes[7] === 0x0a;
+
+      const isWebp =
+        String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
+        String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+
+      if (!isJpeg && !isPng && !isWebp) return false;
+
+      // Verify actual image decoding
+      const bitmap = await createImageBitmap(file);
+
+      const isValid = bitmap.width > 0 && bitmap.height > 0;
+
+      bitmap.close();
+
+      return isValid;
+    } catch {
+      return false;
+    }
+  };
   const isValidMp4Video = (file: File) => {
     if (isGifFile(file)) return false;
     const isMp4 = file.type.toLowerCase() === "video/mp4" || file.name.toLowerCase().endsWith(".mp4");
     return isMp4;
   };
 
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleThumbnailChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+
     if (!file) return;
 
     if (isGifFile(file)) {
-      toast.error("GIF format is not allowed for thumbnails. Please upload a JPG, PNG, or WEBP image.");
-      e.target.value = "";
+      toast.error("GIF format is not allowed. Please upload JPG, PNG, or WEBP.");
+      input.value = "";
       return;
     }
 
     if (!isValidThumbnailImage(file)) {
-      toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP images are allowed.");
-      e.target.value = "";
+      toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP are allowed.");
+      input.value = "";
       return;
     }
 
     if (file.size > MAX_THUMBNAIL_SIZE) {
       toast.error("Thumbnail image must not exceed 10 MB.");
-      e.target.value = "";
+      input.value = "";
       return;
     }
 
-    if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
+    // Validate actual image content
+    const isValid = await isValidImageContent(file);
+
+    if (!isValid) {
+      toast.error(
+        "Invalid or corrupted image. Please upload a valid image."
+      );
+      input.value = "";
+      return;
+    }
+
+    // Generate preview only after successful validation
+    if (thumbnailPreview) {
+      URL.revokeObjectURL(thumbnailPreview);
+    }
 
     setThumbnailFile(file);
     setThumbnailPreview(URL.createObjectURL(file));
@@ -165,7 +220,7 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
     }
 
     if (file.size > MAX_VIDEO_SIZE) {
-      toast.error("Video file must not exceed 100 MB.");
+      toast.error("Video file must not exceed 50 MB.");
       e.target.value = "";
       return;
     }
@@ -250,7 +305,7 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
           return;
         }
         if (videoFile.size > MAX_VIDEO_SIZE) {
-          toast.error("Video file must not exceed 100 MB.");
+          toast.error("Video file must not exceed 50 MB.");
           return;
         }
       }
@@ -414,34 +469,34 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
           </div>
 
           {/* Description */}
-         <div className="w-full min-w-0 space-y-1.5 ">
-  <div className="flex items-center justify-between gap-2">
-    <Label htmlFor="insight-desc" className="text-xs font-medium">
-      Description Content <span className="text-rose-500">*</span>
-    </Label>
+          <div className="w-full min-w-0 space-y-1.5 ">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="insight-desc" className="text-xs font-medium">
+                Description Content <span className="text-rose-500">*</span>
+              </Label>
 
-    <span className="shrink-0 text-[10px] text-muted-foreground">
-      {description.length}/500
-    </span>
-  </div>
+              <span className="shrink-0 text-[10px] text-muted-foreground">
+                {description.length}/500
+              </span>
+            </div>
 
-  <Textarea
-    id="insight-desc"
-    placeholder="Write the educational content or detailed financial advice..."
-    value={description}
-    onChange={(e) => setDescription(e.target.value)}
-    disabled={mutation.isPending}
-    maxLength={500}
-    rows={4}
-    wrap="soft"
-    style={{
-      overflowWrap: "anywhere",
-      wordBreak: "break-all",
-      whiteSpace: "pre-wrap",
-    }}
-    className="!box-border block h-[130px] min-h-[130px] max-h-[130px] w-full min-w-0 max-w-full resize-none overflow-x-hidden overflow-y-auto text-xs leading-relaxed"
-  />
-</div>
+            <Textarea
+              id="insight-desc"
+              placeholder="Write the educational content or detailed financial advice..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={mutation.isPending}
+              maxLength={500}
+              rows={4}
+              wrap="soft"
+              style={{
+                overflowWrap: "anywhere",
+                wordBreak: "break-all",
+                whiteSpace: "pre-wrap",
+              }}
+              className="!box-border block h-[130px] min-h-[130px] max-h-[130px] w-full min-w-0 max-w-full resize-none overflow-x-hidden overflow-y-auto text-xs leading-relaxed"
+            />
+          </div>
 
           {/* Content Mode Switch (Media Upload vs External Link) */}
           <div className="space-y-3 pt-2 border-t border-border">
@@ -609,7 +664,7 @@ export function CreateInsightDialog({ onSuccess }: CreateInsightDialogProps) {
                       </span>
 
                       <span className="text-[10px] text-muted-foreground">
-                        MP4 format only up to 100MB (No GIFs)
+                        MP4 format only up to 50MB (No GIFs)
                       </span>
                     </div>
                   )}

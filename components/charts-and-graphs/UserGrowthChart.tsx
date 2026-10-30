@@ -101,7 +101,7 @@ export function UserGrowthChart() {
         startDate: appliedStartDate,
         endDate: appliedEndDate,
         granularity,
-      } as UserGrowthParams;
+      };
     }
 
     return {
@@ -192,14 +192,32 @@ export function UserGrowthChart() {
       list = payload.data;
     }
 
-    return list.map((item) => ({
-      period: item.period || "",
-      label: item.label || String(item.year ?? item.month ?? ""),
-      newUsers: Number(item.newUsers ?? item.count ?? 0),
-      totalUsers: Number(item.totalUsers ?? 0),
-    }));
-  }, [payload]);
+    return list.map((item) => {
+      const period = item.period || "";
 
+      let label = item.label || "";
+
+      // Daily date labels: Oct 01, Oct 02, etc.
+      if (
+        filterType === "range" &&
+        /^\d{4}-\d{2}-\d{2}/.test(period)
+      ) {
+        const date = new Date(`${period.slice(0, 10)}T00:00:00`);
+
+        label = date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "2-digit",
+        });
+      }
+
+      return {
+        period,
+        label: label || String(item.year ?? item.month ?? ""),
+        newUsers: Number(item.newUsers ?? item.count ?? 0),
+        totalUsers: Number(item.totalUsers ?? 0),
+      };
+    });
+  }, [payload, filterType]);
 
   const displayChartData = useMemo(() => {
     // In Monthly view, omit future months and explicitly mark the current
@@ -268,7 +286,31 @@ export function UserGrowthChart() {
       };
     });
   }, [filterType, chartData, today]);
+  const renderedChartData = useMemo(() => {
+    if (displayChartData.length !== 1) {
+      return displayChartData;
+    }
 
+    const point = displayChartData[0];
+
+    // Display-only anchors: same actual values, no fabricated counts.
+    return [
+      {
+        ...point,
+        label: "",
+        isSynthetic: true,
+      },
+      {
+        ...point,
+        isSynthetic: false,
+      },
+      {
+        ...point,
+        label: "",
+        isSynthetic: true,
+      },
+    ];
+  }, [displayChartData]);
   // Dots are useful for short ranges but overlap on long date ranges.
   // Keep active dots so individual points remain inspectable on hover.
   const showDataDots = displayChartData.length <= 36;
@@ -489,13 +531,14 @@ export function UserGrowthChart() {
               </div>
             </div>
 
+
             <ChartContainer
               config={chartConfig}
               className="h-64 w-full aspect-auto"
             >
               <AreaChart
-                data={displayChartData}
-                margin={{ top: 12, right: 36, bottom: 8, left: 4 }}
+                data={renderedChartData}
+                margin={{ top: 20, right: 20, bottom: 8, left: 4 }}
               >
                 <defs>
                   <linearGradient
@@ -505,17 +548,8 @@ export function UserGrowthChart() {
                     x2="0"
                     y2="1"
                   >
-                    <stop
-                      offset="5%"
-                      stopColor="#649809"
-                      stopOpacity={0.4}
-                    />
-
-                    <stop
-                      offset="95%"
-                      stopColor="#649809"
-                      stopOpacity={0.02}
-                    />
+                    <stop offset="5%" stopColor="#649809" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#649809" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
 
@@ -528,11 +562,11 @@ export function UserGrowthChart() {
 
                 <XAxis
                   dataKey="label"
-                  padding={{ left: 12, right: 28 }}
-                  minTickGap={32}
-                  interval="preserveStartEnd"
                   tickLine={false}
                   axisLine={false}
+                  interval={0}
+                  tick={{ fontSize: 12 }}
+                  padding={{ left: 10, right: 10 }}
                 />
 
                 <YAxis
@@ -541,6 +575,7 @@ export function UserGrowthChart() {
                   tickMargin={8}
                   allowDecimals={false}
                   className="text-[11px] fill-gray-500"
+                  domain={[0, "auto"]}
                 />
 
                 <ChartTooltip
@@ -554,11 +589,7 @@ export function UserGrowthChart() {
                     payload: tooltipPayload,
                     label,
                   }) => {
-                    if (
-                      active &&
-                      tooltipPayload &&
-                      tooltipPayload.length
-                    ) {
+                    if (active && tooltipPayload?.length) {
                       const newCount =
                         tooltipPayload.find(
                           (item) => item.dataKey === "newUsers"
@@ -570,31 +601,27 @@ export function UserGrowthChart() {
                         )?.value ?? 0;
 
                       return (
-                        <div className="bg-white border border-border rounded-lg p-2.5 shadow-md text-xs space-y-1">
-                          <p className="font-bold text-gray-900 border-b border-gray-100 pb-1">
+                        <div className="bg-white border border-border rounded-lg p-3 shadow-md text-xs space-y-2">
+                          <p className="font-bold text-gray-900 border-b pb-2">
                             {label}
                           </p>
 
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-gray-500 flex items-center gap-1.5">
-                              <span className="h-2 w-2 rounded-full bg-[#649809]" />
-                              New Users:
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              New Users
                             </span>
-
-                            <span className="font-bold text-[#649809]">
+                            <strong className="text-[#649809]">
                               {newCount}
-                            </span>
+                            </strong>
                           </div>
 
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-gray-500 flex items-center gap-1.5">
-                              <span className="h-2 w-2 rounded-full bg-[#335003]" />
-                              Total Users:
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              Total Users
                             </span>
-
-                            <span className="font-bold text-gray-900">
+                            <strong className="text-[#335003]">
                               {totalCount}
-                            </span>
+                            </strong>
                           </div>
                         </div>
                       );
@@ -606,42 +633,52 @@ export function UserGrowthChart() {
 
                 <Area
                   dataKey="newUsers"
-                  type="linear"
+                  type="monotone"
                   fill="url(#growthGradient)"
                   fillOpacity={1}
                   stroke="#649809"
                   strokeWidth={2.5}
-                  dot={showDataDots ? {
-                    r: 4,
-                    fill: "#649809",
-                    stroke: "#ffffff",
-                    strokeWidth: 2,
-                  } : false}
-                  activeDot={{ r: 6, stroke: "#ffffff", strokeWidth: 2 }}
-                  connectNulls
+                  dot={(props: any) => {
+                    if (props.payload?.isSynthetic) return null;
+
+                    return (
+                      <circle
+                        cx={props.cx}
+                        cy={props.cy}
+                        r={5}
+                        fill="#649809"
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                      />
+                    );
+                  }}
+                  activeDot={{ r: 7 }}
                 />
 
                 <Line
                   type="monotone"
                   dataKey="totalUsers"
-                  name="Total Users"
-                  stroke="#365314"
+                  stroke="#335003"
                   strokeWidth={2}
-                  dot={{
-                    r: 5,
-                    fill: "#365314",
-                    stroke: "#FFFFFF",
-                    strokeWidth: 2,
+                  dot={(props: any) => {
+                    if (props.payload?.isSynthetic) return null;
+
+                    return (
+                      <circle
+                        cx={props.cx}
+                        cy={props.cy}
+                        r={5}
+                        fill="#335003"
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                      />
+                    );
                   }}
-                  activeDot={{
-                    r: 7,
-                    fill: "#365314",
-                    stroke: "#FFFFFF",
-                    strokeWidth: 2,
-                  }}
+                  activeDot={{ r: 7 }}
                 />
               </AreaChart>
             </ChartContainer>
+
 
             {filterType === "monthly" && (
               <p className="mt-1 text-[11px] text-gray-500">

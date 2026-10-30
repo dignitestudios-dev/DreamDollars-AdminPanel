@@ -34,12 +34,14 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmationDialog } from "../components/confirmation-dialog";
 
 export default function UserDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const userId = params?.id as string;
+  const [showStatusConfirmation, setShowStatusConfirmation] = useState(false);
 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
@@ -106,19 +108,34 @@ export default function UserDetailPage() {
 
   const handleToggleStatus = async () => {
     if (!profile) return;
-    const isCurrentlyActive = profile.accountStatus === "active";
-    const nextStatus = isCurrentlyActive ? "inactive" : "active";
-    const statusLabel = nextStatus === "active" ? "Active" : "Inactive";
+
+    const nextStatus =
+      profile.accountStatus === "active"
+        ? "inactive"
+        : "active";
+
+    const statusLabel =
+      nextStatus === "active" ? "Active" : "Inactive";
 
     try {
       setIsUpdatingStatus(true);
+
       await updateUserStatus(profile.id, nextStatus);
+
       toast.success(`User marked as ${statusLabel}`);
+
+      setShowStatusConfirmation(false);
+
       await refetch();
-      // Invalidate general users list so table stays in sync
-      queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
+
+      queryClient.invalidateQueries({
+        queryKey: ["adminUsers"],
+      });
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to update user status");
+      toast.error(
+        err?.response?.data?.message ||
+        "Failed to update user status"
+      );
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -298,7 +315,7 @@ export default function UserDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleToggleStatus}
+              onClick={() => setShowStatusConfirmation(true)}
               disabled={isUpdatingStatus}
               className="cursor-pointer border-rose-300 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-800 dark:hover:bg-rose-950/30 h-9 gap-1.5 text-xs shadow-xs"
             >
@@ -312,7 +329,7 @@ export default function UserDetailPage() {
           ) : (
             <Button
               size="sm"
-              onClick={handleToggleStatus}
+              onClick={() => setShowStatusConfirmation(true)}
               disabled={isUpdatingStatus}
               className="cursor-pointer bg-[#649809] hover:bg-[#527d07] text-white h-9 gap-1.5 text-xs shadow-xs"
             >
@@ -360,8 +377,8 @@ export default function UserDetailPage() {
                   <Badge
                     variant="outline"
                     className={`text-xs capitalize font-medium ${profile.accountStatus === "active"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
-                        : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+                      : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800"
                       }`}
                   >
                     Status: {profile.accountStatus || "unknown"}
@@ -656,6 +673,32 @@ export default function UserDetailPage() {
           </div>
         </CardContent>
       </Card>
+      <ConfirmationDialog
+        open={showStatusConfirmation}
+        onOpenChange={setShowStatusConfirmation}
+        title={
+          profile.accountStatus === "active"
+            ? "Deactivate User?"
+            : "Activate User?"
+        }
+        description={
+          profile.accountStatus === "active"
+            ? `Are you sure you want to deactivate ${displayName}? This user will no longer have an active account.`
+            : `Are you sure you want to activate ${displayName}? This will restore the user's active account status.`
+        }
+        confirmText={
+          profile.accountStatus === "active"
+            ? "Yes, Deactivate"
+            : "Yes, Activate"
+        }
+        variant={
+          profile.accountStatus === "active"
+            ? "destructive"
+            : "default"
+        }
+        isLoading={isUpdatingStatus}
+        onConfirm={handleToggleStatus}
+      />
     </div>
   );
 }

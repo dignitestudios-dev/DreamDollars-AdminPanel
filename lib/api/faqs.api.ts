@@ -1,9 +1,12 @@
 import { API } from "./axios";
 
+export type FaqStatus = "active" | "inactive";
+
 export interface AdminFaq {
   id: string;
   question: string;
   answer: string;
+  status?: FaqStatus | string;
   is_deleted?: boolean;
   created_at: string;
   updated_at: string;
@@ -27,6 +30,7 @@ export interface GetFaqsParams {
   search?: string;
   page?: number;
   limit?: number;
+  status?: FaqStatus | "all" | string;
 }
 
 export interface GetFaqByIdResponse {
@@ -38,6 +42,7 @@ export interface GetFaqByIdResponse {
 export interface CreateFaqPayload {
   question: string;
   answer: string;
+  status?: FaqStatus;
 }
 
 export interface CreateFaqResponse {
@@ -49,6 +54,7 @@ export interface CreateFaqResponse {
 export interface UpdateFaqPayload {
   question?: string;
   answer?: string;
+  status?: FaqStatus;
 }
 
 export interface UpdateFaqResponse {
@@ -63,7 +69,7 @@ export interface DeleteFaqResponse {
 }
 
 /**
- * Fetch all FAQs with pagination and optional search
+ * Fetch all FAQs with pagination and optional search and status filter
  */
 export const getAdminFaqs = async (
   params?: GetFaqsParams
@@ -78,6 +84,9 @@ export const getAdminFaqs = async (
   }
   if (params?.search && params.search.trim()) {
     cleanParams.search = params.search.trim();
+  }
+  if (params?.status && params.status !== "all") {
+    cleanParams.status = params.status;
   }
 
   const response = await API.get<GetFaqsResponse>("/admin/faqs", {
@@ -118,6 +127,16 @@ export const updateAdminFaq = async (
     payload
   );
   return response.data;
+};
+
+/**
+ * Quick toggle FAQ status (active / inactive)
+ */
+export const toggleAdminFaqStatus = async (
+  id: string,
+  status: FaqStatus
+): Promise<UpdateFaqResponse> => {
+  return updateAdminFaq(id, { status });
 };
 
 /**

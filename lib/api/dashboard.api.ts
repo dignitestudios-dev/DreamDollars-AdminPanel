@@ -59,7 +59,8 @@ export interface UserGrowthRange {
 }
 
 export interface UserGrowthData {
-  filterType?: "monthly" | "yearly";
+  filterType?: "monthly" | "yearly" | "range";
+  granularity?: "daily" | "weekly" | "monthly" | "yearly";
   range?: UserGrowthRange;
   summary?: UserGrowthSummary;
   chart: UserGrowthPoint[];
@@ -75,7 +76,8 @@ export interface UserGrowthResponse {
 }
 
 export interface UserGrowthParams {
-  filterType?: "monthly" | "yearly" | string;
+  filterType?: "monthly" | "yearly" | "range";
+  granularity?: "daily" | "weekly" | "monthly" | "yearly";
   year?: number | string;
   startDate?: string;
   endDate?: string;
@@ -93,6 +95,6 @@ export const getUserGrowth = async (
       },
     }
   );
+
   return response.data;
 };
-

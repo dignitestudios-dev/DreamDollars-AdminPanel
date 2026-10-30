@@ -48,7 +48,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AdminFaq, FaqsPagination, deleteAdminFaq } from "@/lib/api/faqs.api";
+import { Badge } from "@/components/ui/badge";
+import {
+  AdminFaq,
+  FaqsPagination,
+  FaqStatus,
+  deleteAdminFaq,
+  toggleAdminFaqStatus,
+} from "@/lib/api/faqs.api";
 import { CreateFaqDialog } from "./create-faq-dialog";
 import { EditFaqDialog } from "./edit-faq-dialog";
 import { useSearch } from "@/hooks/use-search";
@@ -60,6 +67,8 @@ interface FaqsTableProps {
   isLoading: boolean;
   search: string;
   onSearchChange: (search: string) => void;
+  status: string;
+  onStatusChange: (status: string) => void;
   page: number;
   onPageChange: (page: number) => void;
   limit: number;
@@ -74,6 +83,8 @@ export function FaqsTable({
   isLoading,
   search,
   onSearchChange,
+  status,
+  onStatusChange,
   page,
   onPageChange,
   limit,
@@ -96,6 +107,20 @@ export function FaqsTable({
   const [deletingFaq, setDeletingFaq] = useState<AdminFaq | null>(null);
 
   const queryClient = useQueryClient();
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, nextStatus }: { id: string; nextStatus: FaqStatus }) =>
+      toggleAdminFaqStatus(id, nextStatus),
+    onSuccess: (data) => {
+      toast.success(data?.message || "FAQ status updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["adminFaqs"] });
+    },
+    onError: (err: any) => {
+      const errorMsg =
+        err?.response?.data?.message || "Failed to update FAQ status. Please try again.";
+      toast.error(errorMsg);
+    },
+  });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAdminFaq(id),
@@ -160,7 +185,31 @@ export function FaqsTable({
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Status Filter */}
+          <Select value={status} onValueChange={onStatusChange}>
+            <SelectTrigger className="h-9 text-xs w-[130px] bg-background">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">
+                All Status
+              </SelectItem>
+              <SelectItem value="active" className="text-xs">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                  Active
+                </span>
+              </SelectItem>
+              <SelectItem value="inactive" className="text-xs">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-gray-400 shrink-0" />
+                  Inactive
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Refresh Button */}
           <Button
             variant="outline"
@@ -185,9 +234,10 @@ export function FaqsTable({
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead className="w-[60%] text-xs font-semibold">Question & Answer</TableHead>
-              <TableHead className="w-[20%] text-xs font-semibold">Created / Updated</TableHead>
-              <TableHead className="w-[20%] text-xs font-semibold text-right pr-6">Actions</TableHead>
+              <TableHead className="w-[50%] text-xs font-semibold">Question & Answer</TableHead>
+              <TableHead className="w-[15%] text-xs font-semibold">Status</TableHead>
+              <TableHead className="w-[18%] text-xs font-semibold">Created / Updated</TableHead>
+              <TableHead className="w-[17%] text-xs font-semibold text-right pr-6">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -200,6 +250,9 @@ export function FaqsTable({
                       <Skeleton className="h-4 w-64" />
                       <Skeleton className="h-3 w-96" />
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-16 rounded-full" />
                   </TableCell>
                   <TableCell>
                     <Skeleton className="h-3 w-24" />
@@ -216,13 +269,13 @@ export function FaqsTable({
             ) : faqs.length === 0 ? (
               // Empty State
               <TableRow>
-                <TableCell colSpan={3} className="h-64 text-center">
+                <TableCell colSpan={4} className="h-64 text-center">
                   <EmptyState
                     icon={HelpCircle}
                     title="No FAQs found"
                     description={
-                      search
-                        ? "No questions matched your search query. Try searching with different keywords."
+                      search || status !== "all"
+                        ? "No questions matched your search query or status filter. Try clearing filters to see more results."
                         : "Start adding frequently asked questions to help users understand the platform."
                     }
                     action={<CreateFaqDialog onSuccess={onRefresh} />}
@@ -232,13 +285,15 @@ export function FaqsTable({
             ) : (
               // Data Rows
               faqs.map((faq) => {
+                const isActive = faq.status?.toLowerCase() !== "inactive";
+
                 return (
                   <TableRow
                     key={faq.id}
                     className="hover:bg-muted/40 transition-colors group"
                   >
                     {/* Question & Answer */}
-                    <TableCell className="py-3.5 w-[60%] max-w-[500px]">
+                    <TableCell className="py-3.5 w-[50%] max-w-[450px]">
                       <div className="space-y-1 min-w-0 max-w-full">
                         <Link
                           href={`/dashboard/faqs/${faq.id}`}
@@ -255,8 +310,48 @@ export function FaqsTable({
                       </div>
                     </TableCell>
 
+                    {/* Status Badge with Click-to-Toggle */}
+                    <TableCell className="py-3.5 w-[15%]">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextStatus: FaqStatus = isActive ? "inactive" : "active";
+                                toggleStatusMutation.mutate({ id: faq.id, nextStatus });
+                              }}
+                              disabled={toggleStatusMutation.isPending}
+                              className="cursor-pointer transition-transform active:scale-95 text-left inline-flex"
+                            >
+                              <Badge
+                                variant="outline"
+                                className={`text-xs font-medium border transition-colors ${
+                                  isActive
+                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                                    : "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20 hover:bg-gray-500/20"
+                                }`}
+                              >
+                                <span
+                                  className={`h-1.5 w-1.5 rounded-full mr-1.5 shrink-0 ${
+                                    isActive ? "bg-emerald-500" : "bg-gray-400"
+                                  }`}
+                                />
+                                {isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">
+                              Click to mark as {isActive ? "Inactive" : "Active"}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
+
                     {/* Created / Updated */}
-                    <TableCell className="py-3.5 w-[20%]">
+                    <TableCell className="py-3.5 w-[18%]">
                       <div className="text-xs text-muted-foreground flex flex-col">
                         <span>{formatDate(faq.updated_at || faq.created_at)}</span>
                         <span className="text-[10px] text-muted-foreground/70">
@@ -266,7 +361,7 @@ export function FaqsTable({
                     </TableCell>
 
                     {/* Actions */}
-                    <TableCell className="py-3.5 w-[20%] text-right pr-6">
+                    <TableCell className="py-3.5 w-[17%] text-right pr-6">
                       <div className="flex items-center justify-end gap-1">
                         {/* View Detail Page */}
                         <TooltipProvider>

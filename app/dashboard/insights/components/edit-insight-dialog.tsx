@@ -57,7 +57,7 @@ export function EditInsightDialog({
   onSuccess,
 }: EditInsightDialogProps) {
   const MAX_THUMBNAIL_SIZE = 10.5 * 1024 * 1024; // 10 MB
-  const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100 MB
+  const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 100 MB
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -158,33 +158,88 @@ export function EditInsightDialog({
     const isMp4 = file.type.toLowerCase() === "video/mp4" || file.name.toLowerCase().endsWith(".mp4");
     return isMp4;
   };
+  const isValidImageContent = async (file: File): Promise<boolean> => {
+    try {
+      const buffer = await file.slice(0, 12).arrayBuffer();
+      const bytes = new Uint8Array(buffer);
 
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+      const isJpeg =
+        bytes[0] === 0xff &&
+        bytes[1] === 0xd8 &&
+        bytes[2] === 0xff;
+
+      const isPng =
+        bytes[0] === 0x89 &&
+        bytes[1] === 0x50 &&
+        bytes[2] === 0x4e &&
+        bytes[3] === 0x47 &&
+        bytes[4] === 0x0d &&
+        bytes[5] === 0x0a &&
+        bytes[6] === 0x1a &&
+        bytes[7] === 0x0a;
+
+      const isWebp =
+        String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
+        String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+
+      if (!isJpeg && !isPng && !isWebp) return false;
+
+      // Verify actual image decoding
+      const bitmap = await createImageBitmap(file);
+
+      const isValid = bitmap.width > 0 && bitmap.height > 0;
+
+      bitmap.close();
+
+      return isValid;
+    } catch {
+      return false;
+    }
+  };
+  const handleThumbnailChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+
     if (!file) return;
 
     if (isGifFile(file)) {
-      toast.error("GIF format is not allowed for thumbnails. Please upload a JPG, PNG, or WEBP image.");
-      e.target.value = "";
+      toast.error("GIF format is not allowed. Please upload JPG, PNG, or WEBP.");
+      input.value = "";
       return;
     }
 
     if (!isValidThumbnailImage(file)) {
-      toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP images are allowed.");
-      e.target.value = "";
+      toast.error("Invalid thumbnail format. Only JPG, PNG, and WEBP are allowed.");
+      input.value = "";
       return;
     }
 
     if (file.size > MAX_THUMBNAIL_SIZE) {
       toast.error("Thumbnail image must not exceed 10 MB.");
-      e.target.value = "";
+      input.value = "";
       return;
     }
-    if (file) {
-      setThumbnailFile(file);
-      const previewUrl = URL.createObjectURL(file);
-      setThumbnailPreview(previewUrl);
+
+    // Validate actual image content
+    const isValid = await isValidImageContent(file);
+
+    if (!isValid) {
+      toast.error(
+        "Invalid or corrupted image. Please upload a valid image."
+      );
+      input.value = "";
+      return;
     }
+
+    // Generate preview only after successful validation
+    if (thumbnailPreview) {
+      URL.revokeObjectURL(thumbnailPreview);
+    }
+
+    setThumbnailFile(file);
+    setThumbnailPreview(URL.createObjectURL(file));
   };
 
   const handleRemoveThumbnail = () => {
@@ -216,7 +271,7 @@ export function EditInsightDialog({
     }
 
     if (file.size > MAX_VIDEO_SIZE) {
-      toast.error("Video file must not exceed 100 MB.");
+      toast.error("Video file must not exceed 50 MB.");
       e.target.value = "";
       return;
     }
@@ -290,7 +345,7 @@ export function EditInsightDialog({
           return;
         }
         if (videoFile.size > MAX_VIDEO_SIZE) {
-          toast.error("Video file must not exceed 100 MB.");
+          toast.error("Video file must not exceed 50 MB.");
           return;
         }
       }
@@ -659,7 +714,7 @@ export function EditInsightDialog({
                         Click to upload Video File
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        MP4 format only up to 100MB (No GIFs)
+                        MP4 format only up to 50MB (No GIFs)
                       </span>
                     </div>
                   )}

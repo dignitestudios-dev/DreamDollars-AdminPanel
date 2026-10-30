@@ -15,6 +15,12 @@ import { ChatRoom, ChatMessage, getAdminChatRooms, getChatMessages } from "@/lib
 import { getChatSocket } from "@/lib/chat/socket";
 import { playNotificationSound, unlockAudioContext } from "@/lib/chat/chat-sound";
 import { requestFcmToken, onForegroundMessage } from "@/lib/firebase/messaging";
+import {
+  setupGlobalOfflineRetryListener,
+  processPendingQueue,
+  removePendingMessage,
+  OfflineMessageSentDetail,
+} from "@/lib/chat/offline-queue";
 import { toast } from "sonner";
 import { Socket } from "socket.io-client";
 
@@ -58,6 +64,46 @@ export function ChatNotificationProvider({
   const readRoomIdsRef = useRef<Set<string>>(new Set());
   const lastAcknowledgeTimeRef = useRef<Record<string, number>>({});
   const processedMessageIdsRef = useRef<Map<string, number>>(new Map());
+
+  // Initialize global offline chat retry listeners across entire dashboard
+  useEffect(() => {
+    setupGlobalOfflineRetryListener();
+  }, []);
+
+  // Listen for offline messages successfully sent in background to update rooms sidebar
+  useEffect(() => {
+    const handleOfflineMessageSent = (event: Event) => {
+      const customEvent = event as CustomEvent<OfflineMessageSentDetail>;
+      const { serverMessage, roomId, text } = customEvent.detail;
+
+      setRooms((prev) => {
+        const roomIndex = prev.findIndex(
+          (r) => String(r.id || (r as any)._id) === String(roomId)
+        );
+        if (roomIndex !== -1) {
+          const updated: ChatRoom = {
+            ...prev[roomIndex],
+            last_message_text: text || serverMessage.text || "Message sent",
+            last_message_sender_type: "admin" as const,
+            last_message_sent_at: serverMessage.created_at || new Date().toISOString(),
+          };
+          const rest = prev.filter((_, idx) => idx !== roomIndex);
+          return [updated, ...rest];
+        }
+        return prev;
+      });
+
+      const isOnChatPage = Boolean(pathnameRef.current?.startsWith("/dashboard/chat"));
+      if (!isOnChatPage) {
+        toast.success("Queued offline message was sent successfully.");
+      }
+    };
+
+    window.addEventListener("chat:offline_message_sent", handleOfflineMessageSent);
+    return () => {
+      window.removeEventListener("chat:offline_message_sent", handleOfflineMessageSent);
+    };
+  }, []);
 
   useEffect(() => {
     activeRoomIdRef.current = activeRoomId;
@@ -300,6 +346,8 @@ export function ChatNotificationProvider({
       if (activeRoomIdRef.current) {
         sock.emit("join_room", { roomId: activeRoomIdRef.current });
       }
+      // Re-trigger pending queue on socket connect/reconnect
+      processPendingQueue().catch(() => {});
     };
 
     const handleDisconnect = () => {
@@ -308,7 +356,12 @@ export function ChatNotificationProvider({
 
     // Global Inbound new_message handler
     const handleNewMessage = (newMsg: ChatMessage) => {
-      // Only process messages sent by users/customers
+      // If incoming message has a tempId, remove from offline queue to avoid duplicate sends
+      if (newMsg.tempId) {
+        removePendingMessage(newMsg.tempId);
+      }
+
+      // Only process notifications for messages sent by users/customers
       if (newMsg.sender_type !== "user") {
         return;
       }

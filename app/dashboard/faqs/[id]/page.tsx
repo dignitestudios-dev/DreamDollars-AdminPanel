@@ -4,11 +4,18 @@ import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAdminFaqById, deleteAdminFaq } from "@/lib/api/faqs.api";
+import { getAdminFaqById, deleteAdminFaq, toggleAdminFaqStatus, FaqStatus } from "@/lib/api/faqs.api";
 import { EditFaqDialog } from "../components/edit-faq-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +66,21 @@ export default function FaqDetailPage() {
       ? `${faq.question} | Dream Dollar Admin`
       : "FAQ Details | Dream Dollar Admin";
   }, [faq?.question]);
+
+  // Toggle status mutation
+  const toggleStatusMutation = useMutation({
+    mutationFn: (nextStatus: FaqStatus) => toggleAdminFaqStatus(id, nextStatus),
+    onSuccess: (res) => {
+      toast.success(res?.message || "FAQ status updated successfully");
+      queryClient.invalidateQueries({ queryKey: ["adminFaq", id] });
+      queryClient.invalidateQueries({ queryKey: ["adminFaqs"] });
+    },
+    onError: (err: any) => {
+      toast.error(
+        err?.response?.data?.message || "Failed to update FAQ status."
+      );
+    },
+  });
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -198,57 +220,114 @@ export default function FaqDetailPage() {
       </div>
 
       {/* Main FAQ Card */}
-      <Card className="border-border shadow-sm">
-        <CardHeader className="pb-3 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-[#649809]/10 border border-[#649809]/20 flex items-center justify-center text-[#649809]">
-              <HelpCircle className="size-4" />
-            </div>
-            <div>
-              <CardTitle className="text-base font-bold">Question & Answer</CardTitle>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6 space-y-6">
-          {/* Question */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-              Question
-            </h3>
-            <p className="text-lg font-bold text-foreground leading-snug break-words">
-              {faq.question || "—"}
-            </p>
-          </div>
+      {(() => {
+        const isActive = faq.status?.toLowerCase() !== "inactive";
+        return (
+          <Card className="border-border shadow-sm">
+            <CardHeader className="pb-3 border-b border-border/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-[#649809]/10 border border-[#649809]/20 flex items-center justify-center text-[#649809]">
+                    <HelpCircle className="size-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold">Question & Answer</CardTitle>
+                  </div>
+                </div>
 
-          {/* Answer */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Answer
-            </h3>
-            <div className="rounded-xl bg-muted/40 p-4 sm:p-5 border border-border text-sm leading-relaxed text-foreground whitespace-pre-line break-words">
-              {faq.answer || "—"}
-            </div>
-          </div>
+                {/* Status Badge with Click-to-Toggle */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextStatus: FaqStatus = isActive ? "inactive" : "active";
+                          toggleStatusMutation.mutate(nextStatus);
+                        }}
+                        disabled={toggleStatusMutation.isPending}
+                        className="cursor-pointer transition-transform active:scale-95 inline-flex"
+                      >
+                        <Badge
+                          variant="outline"
+                          className={`text-xs font-medium border transition-colors ${
+                            isActive
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                              : "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20 hover:bg-gray-500/20"
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full mr-1.5 shrink-0 ${
+                              isActive ? "bg-emerald-500" : "bg-gray-400"
+                            }`}
+                          />
+                          {isActive ? "Active (Visible)" : "Inactive (Hidden)"}
+                        </Badge>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">
+                        Click to mark as {isActive ? "Inactive" : "Active"}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {/* Question */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Question
+                </h3>
+                <p className="text-lg font-bold text-foreground leading-snug break-words">
+                  {faq.question || "—"}
+                </p>
+              </div>
 
-          {/* Timestamps */}
-          <div className="flex flex-wrap items-center gap-6 pt-2 border-t border-border/60 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="size-3.5 text-[#649809]" />
-              <span>Created:</span>
-              <span className="font-medium text-foreground">
-                {formatDateTime(faq.created_at)}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Calendar className="size-3.5 text-[#649809]" />
-              <span>Last Updated:</span>
-              <span className="font-medium text-foreground">
-                {formatDateTime(faq.updated_at)}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              {/* Answer */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  Answer
+                </h3>
+                <div className="rounded-xl bg-muted/40 p-4 sm:p-5 border border-border text-sm leading-relaxed text-foreground whitespace-pre-line break-words">
+                  {faq.answer || "—"}
+                </div>
+              </div>
+
+              {/* Timestamps & Status */}
+              <div className="flex flex-wrap items-center gap-6 pt-2 border-t border-border/60 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <span>Status:</span>
+                  <span
+                    className={`font-semibold capitalize ${
+                      isActive
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="size-3.5 text-[#649809]" />
+                  <span>Created:</span>
+                  <span className="font-medium text-foreground">
+                    {formatDateTime(faq.created_at)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="size-3.5 text-[#649809]" />
+                  <span>Last Updated:</span>
+                  <span className="font-medium text-foreground">
+                    {formatDateTime(faq.updated_at)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Edit Dialog */}
       <EditFaqDialog

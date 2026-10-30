@@ -12,31 +12,20 @@ import {
 } from "@/lib/api/chat.api";
 import { getChatSocket } from "@/lib/chat/socket";
 import { useChatNotifications } from "@/context/chat-notification-context";
+import {
+  savePendingMessage,
+  removePendingMessage,
+  getPendingMessages,
+  processPendingQueue,
+  retrySinglePendingMessage,
+  OfflineMessageSentDetail,
+  OfflineMessageFailedDetail,
+} from "@/lib/chat/offline-queue";
 import { ChatSidebar } from "./components/chat-sidebar";
 import { ChatWindow } from "./components/chat-window";
 import { toast } from "sonner";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/store";
-
-interface PendingMessage {
-  tempId: string;
-  roomId: string;
-  text: string;
-  createdAt: string;
-}
-
-const getPendingMessagesFromStorage = (roomId?: string): PendingMessage[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem("chat_pending_messages");
-    if (!raw) return [];
-    const all: PendingMessage[] = JSON.parse(raw);
-    if (!Array.isArray(all)) return [];
-    return roomId ? all.filter((m) => m.roomId === roomId) : all;
-  } catch {
-    return [];
-  }
-};
 
 function withTimeout<T>(
   promise: Promise<T>,
@@ -63,35 +52,6 @@ function withTimeout<T>(
     );
   });
 }
-
-const savePendingMessageToStorage = (msg: PendingMessage) => {
-  if (typeof window === "undefined") return;
-  try {
-    const current = getPendingMessagesFromStorage();
-    const filtered = current.filter((m) => m.tempId !== msg.tempId);
-    localStorage.setItem(
-      "chat_pending_messages",
-      JSON.stringify([...filtered, msg])
-    );
-  } catch {
-    // Ignore
-  }
-};
-
-const removePendingMessageFromStorage = (tempId: string) => {
-  if (typeof window === "undefined") return;
-  try {
-    const current = getPendingMessagesFromStorage();
-    const filtered = current.filter((m) => m.tempId !== tempId);
-    if (filtered.length === 0) {
-      localStorage.removeItem("chat_pending_messages");
-    } else {
-      localStorage.setItem("chat_pending_messages", JSON.stringify(filtered));
-    }
-  } catch {
-    // Ignore
-  }
-};
 
 function SupportChatContent() {
   const router = useRouter();
@@ -278,7 +238,7 @@ function SupportChatContent() {
           if (page === 1) {
             combined = [...fetchedMessages];
             // Include locally pending / unsent messages for this room
-            const pendingForRoom = getPendingMessagesFromStorage(targetRoomId);
+            const pendingForRoom = getPendingMessages(targetRoomId);
             if (pendingForRoom.length > 0) {
               const existingIds = new Set(
                 combined.map((m) => String(m.tempId || m.id || ""))
@@ -496,79 +456,27 @@ function SupportChatContent() {
 
   // Retry single failed or pending message
   const handleRetryMessage = useCallback(async (tempIdOrId: string) => {
-    if (activeRetryingIdsRef.current.has(tempIdOrId)) return;
-
-    let targetMsg: { tempId: string; roomId: string; text: string } | null = null;
-
-    setMessages((prev) => {
-      const found = prev.find((m) => m.tempId === tempIdOrId || m.id === tempIdOrId);
-      if (found && found.text) {
-        targetMsg = {
-          tempId: found.tempId || found.id,
-          roomId: found.room_id || selectedRoomRef.current?.id || "",
-          text: found.text,
-        };
-        return prev.map((m) =>
-          m.tempId === tempIdOrId || m.id === tempIdOrId
-            ? { ...m, isOptimistic: true, hasError: false }
-            : m
-        );
-      }
-      return prev;
-    });
-
-    if (!targetMsg) {
-      const storagePending = getPendingMessagesFromStorage();
-      const foundInStorage = storagePending.find((p) => p.tempId === tempIdOrId);
-      if (foundInStorage) {
-        targetMsg = foundInStorage;
-      }
-    }
-
-    if (!targetMsg || !targetMsg.roomId || !targetMsg.text) {
-      return;
-    }
-
-    activeRetryingIdsRef.current.add(tempIdOrId);
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.tempId === tempIdOrId || m.id === tempIdOrId
+          ? { ...m, isOptimistic: true, hasError: false }
+          : m
+      )
+    );
 
     try {
-      const serverMessage = await sendChatMessage(targetMsg.roomId, {
-        text: targetMsg.text,
-        tempId: targetMsg.tempId,
-      });
-
-      if (serverMessage && (serverMessage.id || serverMessage.tempId)) {
-        removePendingMessageFromStorage(targetMsg.tempId);
+      const serverMessage = await retrySinglePendingMessage(tempIdOrId);
+      if (serverMessage) {
         setMessages((prev) =>
           prev.map((m) =>
-            m.tempId === targetMsg!.tempId || m.id === targetMsg!.tempId
+            m.tempId === tempIdOrId || m.id === tempIdOrId
               ? serverMessage
               : m
           )
         );
-
-        // Update rooms sidebar
-        setRooms((prev) => {
-          const roomIndex = prev.findIndex(
-            (r) => String(r.id || (r as any)._id) === targetMsg!.roomId
-          );
-          if (roomIndex !== -1) {
-            const updated = {
-              ...prev[roomIndex],
-              last_message_text: targetMsg!.text,
-              last_message_sender_type: "admin" as const,
-              last_message_sent_at: serverMessage.created_at || new Date().toISOString(),
-            };
-            const rest = prev.filter((_, idx) => idx !== roomIndex);
-            return [updated, ...rest];
-          }
-          return prev;
-        });
-
         toast.success("Message sent successfully!");
       }
-    } catch (err) {
-      console.warn("[Chat] Retry failed for message", tempIdOrId, err);
+    } catch (err: any) {
       setMessages((prev) =>
         prev.map((m) =>
           m.tempId === tempIdOrId || m.id === tempIdOrId
@@ -576,57 +484,79 @@ function SupportChatContent() {
             : m
         )
       );
-    } finally {
-      activeRetryingIdsRef.current.delete(tempIdOrId);
+      toast.error(err?.message || "Failed to retry message. Will auto-retry once online.");
     }
   }, []);
 
   // Auto-retry all pending/failed messages when connection is restored
-  const retryAllPendingMessages = useCallback(async () => {
-    if (typeof window === "undefined" || !navigator.onLine) {
-      return;
-    }
+  const retryAllPendingMessages = useCallback(() => {
+    processPendingQueue().catch(() => {});
+  }, []);
 
-    if (isRetryingRef.current) return;
-    isRetryingRef.current = true;
+  // Synchronize optimistic messages and rooms list with global offline queue events
+  useEffect(() => {
+    const handleRetrying = (e: Event) => {
+      const { tempId } = (e as CustomEvent<{ tempId: string; roomId: string }>).detail;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.tempId === tempId || m.id === tempId
+            ? { ...m, isOptimistic: true, hasError: false }
+            : m
+        )
+      );
+    };
 
-    try {
-      const pendingFromStorage = getPendingMessagesFromStorage();
-      const pendingFromState: PendingMessage[] = [];
+    const handleSent = (e: Event) => {
+      const { tempId, serverMessage, roomId, text } = (e as CustomEvent<OfflineMessageSentDetail>).detail;
 
-      messagesRef.current.forEach((m) => {
-        if (m.hasError && (m.tempId || m.id) && m.text) {
-          const id = m.tempId || m.id;
-          if (!pendingFromStorage.some((p) => p.tempId === id)) {
-            pendingFromState.push({
-              tempId: id,
-              roomId: m.room_id || selectedRoomRef.current?.id || "",
-              text: m.text,
-              createdAt: m.created_at,
-            });
-          }
-        }
-      });
-
-      const allPending = [...pendingFromStorage, ...pendingFromState];
-      if (allPending.length === 0) return;
-
-      console.log(
-        "[Chat] Internet connection restored. Retrying",
-        allPending.length,
-        "pending message(s)..."
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.tempId === tempId || m.id === tempId ? serverMessage : m
+        )
       );
 
-      for (const item of allPending) {
-        if (!navigator.onLine) break;
-        if (item.tempId && !activeRetryingIdsRef.current.has(item.tempId)) {
-          await handleRetryMessage(item.tempId);
+      setRooms((prev) => {
+        const roomIndex = prev.findIndex(
+          (r) => String(r.id || (r as any)._id) === String(roomId)
+        );
+        if (roomIndex !== -1) {
+          const updated = {
+            ...prev[roomIndex],
+            last_message_text: text || serverMessage.text || "Message sent",
+            last_message_sender_type: "admin" as const,
+            last_message_sent_at: serverMessage.created_at || new Date().toISOString(),
+          };
+          const rest = prev.filter((_, idx) => idx !== roomIndex);
+          return [updated, ...rest];
         }
+        return prev;
+      });
+    };
+
+    const handleFailed = (e: Event) => {
+      const { tempId, error, fatal } = (e as CustomEvent<OfflineMessageFailedDetail>).detail;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.tempId === tempId || m.id === tempId
+            ? { ...m, hasError: true, isOptimistic: false }
+            : m
+        )
+      );
+      if (fatal) {
+        toast.error(`Message delivery failed: ${error}`);
       }
-    } finally {
-      isRetryingRef.current = false;
-    }
-  }, [handleRetryMessage]);
+    };
+
+    window.addEventListener("chat:offline_message_retrying", handleRetrying);
+    window.addEventListener("chat:offline_message_sent", handleSent);
+    window.addEventListener("chat:offline_message_failed", handleFailed);
+
+    return () => {
+      window.removeEventListener("chat:offline_message_retrying", handleRetrying);
+      window.removeEventListener("chat:offline_message_sent", handleSent);
+      window.removeEventListener("chat:offline_message_failed", handleFailed);
+    };
+  }, []);
 
   // Listen for online event and auto-send pending messages
   useEffect(() => {
@@ -634,19 +564,19 @@ function SupportChatContent() {
 
     const handleOnline = () => {
       console.log("[Chat] Online event triggered. Auto-sending pending messages...");
-      retryAllPendingMessages();
+      processPendingQueue().catch(() => {});
     };
 
     window.addEventListener("online", handleOnline);
 
     if (navigator.onLine) {
-      retryAllPendingMessages();
+      processPendingQueue().catch(() => {});
     }
 
     return () => {
       window.removeEventListener("online", handleOnline);
     };
-  }, [retryAllPendingMessages]);
+  }, []);
 
   // Setup Socket.IO Event Handlers
   useEffect(() => {
@@ -669,6 +599,11 @@ function SupportChatContent() {
     // Inbound new_message event
     const handleNewMessage = (newMsg: ChatMessage) => {
       console.log("[ChatSocket] Incoming new_message:", newMsg);
+
+      // Remove from offline queue if confirmed
+      if (newMsg.tempId) {
+        removePendingMessage(newMsg.tempId);
+      }
 
       // Deduplicate incoming messages to prevent duplicate state updates/counters from duplicate socket emissions
       const rawId = newMsg.id || (newMsg as any)._id || (newMsg as any).messageId || (newMsg as any).message_id;
@@ -823,7 +758,7 @@ function SupportChatContent() {
     }
 
     const roomId = selectedRoom.id;
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     // Create optimistic message representation
     const optimisticMessage: ChatMessage = {
@@ -836,10 +771,11 @@ function SupportChatContent() {
       text: text,
       created_at: new Date().toISOString(),
       isOptimistic: true,
+      hasError: false,
     };
 
     // Save pending message to persistent storage for offline recovery
-    savePendingMessageToStorage({
+    savePendingMessage({
       tempId,
       roomId,
       text,
@@ -879,14 +815,8 @@ function SupportChatContent() {
     }
 
     try {
-      const serverMessage = await sendChatMessage(roomId, {
-        text,
-        tempId,
-      });
-
-      if (serverMessage && (serverMessage.id || serverMessage.tempId)) {
-        removePendingMessageFromStorage(tempId);
-        // Replace optimistic message with actual persisted message
+      const serverMessage = await retrySinglePendingMessage(tempId);
+      if (serverMessage) {
         setMessages((prev) =>
           prev.map((m) => (m.tempId === tempId ? serverMessage : m))
         );
