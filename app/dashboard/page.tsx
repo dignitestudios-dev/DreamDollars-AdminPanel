@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardStats } from "@/lib/api/dashboard.api";
 import { UserGrowthChart } from "@/components/charts-and-graphs/UserGrowthChart";
@@ -18,11 +20,13 @@ import {
   Mail,
   RefreshCw,
   AlertCircle,
+  ArrowUpRight,
 } from "lucide-react";
 
 type NewUserTimeRange = "today" | "last7Days" | "last30Days";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [newUserTab, setNewUserTab] = useState<NewUserTimeRange>("today");
 
   useEffect(() => {
@@ -77,6 +81,7 @@ export default function DashboardPage() {
       description: "Registered on platform",
       color: "text-[#649809]",
       bgColor: "bg-[#649809]/10",
+      href: "/dashboard/users",
     },
     {
       id: "activeUsers",
@@ -86,6 +91,7 @@ export default function DashboardPage() {
       description: "Currently active",
       color: "text-emerald-600",
       bgColor: "bg-emerald-50",
+      href: "/dashboard/users?status=active",
     },
     {
       id: "inactiveUsers",
@@ -95,6 +101,7 @@ export default function DashboardPage() {
       description: "Dormant accounts",
       color: "text-amber-600",
       bgColor: "bg-amber-50",
+      href: "/dashboard/users?status=inactive",
     },
     {
       id: "newUsers",
@@ -103,6 +110,7 @@ export default function DashboardPage() {
       icon: UserPlus,
       color: "text-blue-600",
       bgColor: "bg-blue-50",
+      href: "/dashboard/users?sortBy=created_at&order=desc",
     },
     // {
     //   id: "paidUsers",
@@ -112,6 +120,7 @@ export default function DashboardPage() {
     //   description: "With paid transactions",
     //   color: "text-[#649809]",
     //   bgColor: "bg-[#F6FAD9]",
+    //   href: "/dashboard/users?isSubscribed=true",
     // },
     {
       id: "subscribedUsers",
@@ -121,6 +130,7 @@ export default function DashboardPage() {
       description: "Active subscription plan",
       color: "text-purple-600",
       bgColor: "bg-purple-50",
+      href: "/dashboard/users?isSubscribed=true",
     },
     {
       id: "unreadChats",
@@ -130,6 +140,7 @@ export default function DashboardPage() {
       description: "Awaiting response",
       color: "text-indigo-600",
       bgColor: "bg-indigo-50",
+      href: "/dashboard/chat",
     },
     {
       id: "unreadMessages",
@@ -139,6 +150,7 @@ export default function DashboardPage() {
       description: "Pending direct messages",
       color: "text-rose-600",
       bgColor: "bg-rose-50",
+      href: "/dashboard/chat",
     },
   ];
 
@@ -214,15 +226,28 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={card.id}
-                    className="bg-white rounded-xl border border-[#e1ebb0] p-3.5 shadow-xs hover:shadow-sm transition-all duration-150 flex flex-col justify-between"
+                    onClick={() => router.push(card.href)}
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        router.push(card.href);
+                      }
+                    }}
+                    className="bg-white rounded-xl border border-[#e1ebb0] p-3.5 shadow-xs hover:shadow-md hover:border-[#649809]/50 hover:-translate-y-0.5 transition-all duration-150 flex flex-col justify-between cursor-pointer group"
+                    title={`View ${card.title}`}
                   >
                     <div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500">
-                          {card.title}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500 group-hover:text-gray-900 transition-colors">
+                            {card.title}
+                          </span>
+                          <ArrowUpRight className="h-3 w-3 text-gray-400 opacity-0 -translate-x-1 translate-y-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:text-[#649809] transition-all" />
+                        </div>
                         <div
-                          className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${card.bgColor}`}
+                          className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${card.bgColor} group-hover:scale-105 transition-transform`}
                         >
                           <Icon className={`h-3.5 w-3.5 ${card.color}`} />
                         </div>
@@ -242,7 +267,10 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-3 gap-1 pt-1.5 mt-2 border-t border-gray-100 text-center">
                       <button
                         type="button"
-                        onClick={() => setNewUserTab("today")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewUserTab("today");
+                        }}
                         className={`py-0.5 px-1 rounded text-center transition-colors cursor-pointer ${
                           newUserTab === "today"
                             ? "bg-[#F6FAD9] text-[#649809] font-semibold border border-[#e1ebb0]"
@@ -254,7 +282,10 @@ export default function DashboardPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setNewUserTab("last7Days")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewUserTab("last7Days");
+                        }}
                         className={`py-0.5 px-1 rounded text-center transition-colors cursor-pointer ${
                           newUserTab === "last7Days"
                             ? "bg-[#F6FAD9] text-[#649809] font-semibold border border-[#e1ebb0]"
@@ -266,7 +297,10 @@ export default function DashboardPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setNewUserTab("last30Days")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewUserTab("last30Days");
+                        }}
                         className={`py-0.5 px-1 rounded text-center transition-colors cursor-pointer ${
                           newUserTab === "last30Days"
                             ? "bg-[#F6FAD9] text-[#649809] font-semibold border border-[#e1ebb0]"
@@ -283,16 +317,21 @@ export default function DashboardPage() {
 
               // Standard compact KPI card
               return (
-                <div
+                <Link
                   key={card.id}
-                  className="bg-white rounded-xl border border-[#e1ebb0] p-3.5 shadow-xs hover:shadow-sm transition-all duration-150 flex flex-col justify-between"
+                  href={card.href}
+                  className="bg-white rounded-xl border border-[#e1ebb0] p-3.5 shadow-xs hover:shadow-md hover:border-[#649809]/50 hover:-translate-y-0.5 transition-all duration-150 flex flex-col justify-between cursor-pointer group"
+                  title={`View ${card.title}`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500">
-                      {card.title}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500 group-hover:text-gray-900 transition-colors">
+                        {card.title}
+                      </span>
+                      <ArrowUpRight className="h-3 w-3 text-gray-400 opacity-0 -translate-x-1 translate-y-1 group-hover:opacity-100 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:text-[#649809] transition-all" />
+                    </div>
                     <div
-                      className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${card.bgColor}`}
+                      className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${card.bgColor} group-hover:scale-105 transition-transform`}
                     >
                       <Icon className={`h-3.5 w-3.5 ${card.color}`} />
                     </div>
@@ -302,11 +341,11 @@ export default function DashboardPage() {
                     <div className="text-xl font-bold text-gray-900">
                       {Number(card.value).toLocaleString()}
                     </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                    <p className="text-[11px] text-gray-400 mt-0.5 truncate group-hover:text-gray-500 transition-colors">
                       {card.description}
                     </p>
                   </div>
-                </div>
+                </Link>
               );
             })}
       </div>
